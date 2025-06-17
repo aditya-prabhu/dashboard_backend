@@ -54,7 +54,7 @@ async def get_pipeline_data(
     ]
     return JSONResponse(content=result)
 
-@router.get("/api/work-items")
+@router.get("/api/release-plan-work-items")
 async def get_work_items():
     release_plan_work_items, error = fetch_wiql_url()
     if error:
