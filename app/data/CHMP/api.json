@@ -1,4 +1,5 @@
 {
     "all-releases": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/releases?minCreatedTime=2025-05-22T00:00:00Z&maxCreatedTime=2025-06-04T00:00:00Z&$top=200&$path=%5CCHMP&api-version=7.1",
-    "iterations-list": "https://dev.azure.com/PSJH/Administrative%20Technology/CHS Hub - Raptor/_apis/work/teamsettings/iterations?&api-version=7.1"
+    "iterations-list": "https://dev.azure.com/PSJH/Administrative%20Technology/CHS Hub - Raptor/_apis/work/teamsettings/iterations?&api-version=7.1",
+    "wiql-url": "https://dev.azure.com/PSJH/1b24dd3b-420d-469b-a3d3-b3e04acc5cc0/_apis/wit/wiql/f15729e0-53bd-4525-b9cb-3f3db9af8bff?api-version=7.1"
 }

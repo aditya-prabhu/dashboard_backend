@@ -1,8 +1,17 @@
 from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import JSONResponse
-from app.utils.fetch_data import fetch_iterations, fetch_releases
+from app.utils.fetch_data import (
+    fetch_iterations, fetch_releases,
+    fetch_wiql_url, fetch_release_plan_work_items
+)
+import re
 
 router = APIRouter()
+
+def parse_html_for_release_notes(item_data):
+    release_notes_html = item_data['fields'].get('Custom.ReleaseNotes', '')
+    match = re.search(r'href="(.*?)"', release_notes_html)
+    return match.group(1) if match else None
 
 @router.get("/api/releases")
 async def get_releases():
@@ -24,7 +33,7 @@ async def get_releases():
 async def get_pipeline_data(
     startDate: str = Query(..., description="Start date"),
     endDate: str = Query(..., description="End date")
-):
+                        ):
     if not startDate or not endDate:
         raise HTTPException(status_code=400, detail="Missing start or end date")
     data, error = fetch_releases(startDate, endDate)
@@ -44,3 +53,28 @@ async def get_pipeline_data(
         for item in data
     ]
     return JSONResponse(content=result)
+
+@router.get("/api/work-items")
+async def get_work_items():
+    release_plan_work_items, error = fetch_wiql_url()
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+
+    results = []
+    for item in release_plan_work_items:
+        item_data, detail_error = fetch_release_plan_work_items(item["url"])
+        if detail_error:
+            continue
+        results.append({
+            "id": item_data["id"],
+            "title": item_data["fields"].get("System.Title"),
+            "state": item_data["fields"].get("System.State"),
+            "webUrl": item_data["_links"]["html"]["href"],
+            "githubPRs": item_data["_links"]["workItemUpdates"]["href"],
+            "release_notes_html": parse_html_for_release_notes(item_data),
+            "PM Approval to Production": item_data['fields'].get('Custom.PMApprovaltoProduction'),
+            "Dev Approval to Staging": item_data['fields'].get('Custom.DevApprovaltoStaging'),
+            "SE Approval to Production": item_data['fields'].get('Custom.SEApprovaltoProduction'),
+            "Approval to Staging": item_data['fields'].get('Custom.ApprovaltoStaging'),
+        })
+    return JSONResponse(content=results)
