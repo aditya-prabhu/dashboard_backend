@@ -5,7 +5,7 @@
 1. **Clone the repository** (if not already done):
 
    ```sh
-   git clone <repo-url>
+   git clone https://github.com/aditya-prabhu/dashboard_backend
    cd dashboard
    ```
 
