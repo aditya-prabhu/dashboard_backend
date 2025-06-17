@@ -13,7 +13,10 @@ def parse_html_for_release_notes(item_data):
     match = re.search(r'href="(.*?)"', release_notes_html)
     return match.group(1) if match else None
 
-@router.get("/api/releases")
+@router.get("/api/releases",
+            description="Fetches release data for current and past iterations",
+            response_description="List of releases with their details"
+)
 async def get_releases():
     iterations, error = fetch_iterations()
     if error:
@@ -29,7 +32,10 @@ async def get_releases():
     ]
     return JSONResponse(content=release_data)
 
-@router.get("/api/pipelines")
+@router.get("/api/pipelines",
+            description="Fetches pipeline data for releases within a specified date range",
+            response_description="List of pipelines with their details"
+)
 async def get_pipeline_data(
     startDate: str = Query(..., description="Start date"),
     endDate: str = Query(..., description="End date")
@@ -54,7 +60,10 @@ async def get_pipeline_data(
     ]
     return JSONResponse(content=result)
 
-@router.get("/api/release-plan-work-items")
+@router.get("/api/release-plan-work-items",
+            description="Fetches work items from the release plan",
+            response_description="data from the release plan work items"
+)
 async def get_work_items():
     release_plan_work_items, error = fetch_wiql_url()
     if error:
