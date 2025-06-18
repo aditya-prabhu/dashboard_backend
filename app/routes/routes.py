@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import JSONResponse
 from app.utils.fetch_data import (
-    fetch_iterations, fetch_releases,
+    fetch_pipeline_releases, fetch_releases,
     fetch_wiql_url, fetch_release_plan_work_items
 )
 import re
@@ -18,9 +18,14 @@ def parse_html_for_release_notes(item_data):
             response_description="List of releases with their details"
 )
 async def get_releases():
-    iterations, error = fetch_iterations()
+    iterations, error = fetch_releases()
     if error:
         raise HTTPException(status_code=500, detail=error)
+    
+    filtered_iterations = [
+        it for it in iterations
+        if it.get("attributes", {}).get("timeFrame") in ["current", "past"]
+    ]
     release_data = [
         {
             "id": it["id"],
@@ -28,9 +33,10 @@ async def get_releases():
             "startDate": it["attributes"]["startDate"],
             "finishDate": it["attributes"]["finishDate"]
         }
-        for it in iterations if it.get("attributes", {}).get("timeFrame") in ["current", "past"]
+        for it in filtered_iterations[-10:]
     ]
     return JSONResponse(content=release_data)
+
 
 @router.get("/api/pipelines",
             description="Fetches pipeline data for releases within a specified date range",
@@ -42,14 +48,14 @@ async def get_pipeline_data(
                         ):
     if not startDate or not endDate:
         raise HTTPException(status_code=400, detail="Missing start or end date")
-    data, error = fetch_releases(startDate, endDate)
+    data, error = fetch_pipeline_releases(startDate, endDate)
     if error:
         raise HTTPException(status_code=500, detail=error)
     result = [
         {
             "releaseId": item["id"],
             "definitionId": item["releaseDefinition"]["id"],
-            "name": item["name"],
+            "name": item["releaseDefinition"]["name"],
             "status": item["status"],
             "createdOn": item["createdOn"],
             "description": item.get("description", "—"),
@@ -61,14 +67,15 @@ async def get_pipeline_data(
     return JSONResponse(content=result)
 
 @router.get("/api/release-plan-work-items",
-            description="Fetches work items from the release plan",
-            response_description="data from the release plan work items"
+            description="Fetches data from the release plan work items",
+            response_description="data from the release plan work items(only last 10 releases)"
 )
 async def get_work_items():
     release_plan_work_items, error = fetch_wiql_url()
     if error:
         raise HTTPException(status_code=500, detail=error)
 
+    release_plan_work_items = release_plan_work_items[-10:]
     results = []
     for item in release_plan_work_items:
         item_data, detail_error = fetch_release_plan_work_items(item["url"])
