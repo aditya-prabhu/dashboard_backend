@@ -33,7 +33,7 @@ def fetch_pipeline_releases(start, end):
         "minCreatedTime": start,
         "maxCreatedTime": end,
         "$top": 200,
-        "$path": "%5CCHMP",
+        "path": "\\CHMP",
         "api-version": "7.1"
     }
     resp = requests.get(api_urls["all-releases"], params=params, auth=AUTH, headers=HEADERS)

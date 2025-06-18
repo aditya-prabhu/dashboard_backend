@@ -56,6 +56,7 @@ async def get_pipeline_data(
             "releaseId": item["id"],
             "definitionId": item["releaseDefinition"]["id"],
             "name": item["releaseDefinition"]["name"],
+            "path": item["releaseDefinition"]["path"],
             "status": item["status"],
             "createdOn": item["createdOn"],
             "description": item.get("description", "—"),
