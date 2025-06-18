@@ -22,18 +22,18 @@ api_json_path = os.path.join(
 with open(api_json_path, 'r') as f:
     api_urls = json.load(f)
 
-def fetch_iterations():
+def fetch_releases():
     resp = requests.get(api_urls["iterations-list"], auth=AUTH, headers=HEADERS)
     if resp.status_code != 200:
         return None, {"error": "Failed to fetch iterations"}
     return resp.json().get("value", []), None
 
-def fetch_releases(start, end):
+def fetch_pipeline_releases(start, end):
     params = {
         "minCreatedTime": start,
         "maxCreatedTime": end,
         "$top": 200,
-        "$path": "\\CHMP",
+        "$path": "%5CCHMP",
         "api-version": "7.1"
     }
     resp = requests.get(api_urls["all-releases"], params=params, auth=AUTH, headers=HEADERS)
