@@ -87,6 +87,28 @@ def fetch_pipeline_releases(start, end, project):
         return None, {"error": "Failed to fetch release data"}
     return resp.json().get("value", []), None
 
+def fetch_pipeline_releases_by_definition(start, end, project, definition_id):
+    """
+    Fetch pipeline releases for a specific definitionId within a date range.
+    """
+    project_info = get_project_info(project)
+    if not project_info:
+        return None, {"error": f"Project '{project}' not found in projects.json"}
+    params = {
+        "definitionId": definition_id,
+        "minCreatedTime": start,
+        "maxCreatedTime": end,
+        "api-version": "7.1"
+    }
+    api_urls, error = load_api_urls(project)
+    if error:
+        return None, error
+    url = api_urls["all-releases"].format(**project_info)
+    resp = requests.get(url, params=params, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": "Failed to fetch release data"}
+    return resp.json().get("value", []), None
+
 def fetch_iteration_work_items(iteration_id, project):
     project_info = get_project_info(project)
     if not project_info:
