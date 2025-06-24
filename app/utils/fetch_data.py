@@ -77,7 +77,7 @@ def fetch_wiki_pages(project):
         return None, {"error": f"Project '{project}' not found in projects.json"}
     api_urls, error = load_api_urls(project)
     if error:
-        return None, error
+        return None, error  
     wiki_url = api_urls.get("wiki-pages")
     if not wiki_url:
         return None, {"error": "wiki-pages URL not found in urls.json"}
