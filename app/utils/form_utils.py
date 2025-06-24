@@ -38,7 +38,6 @@ def append_project_to_projects_json(project_name, path, team_name):
     else:
         projects = []
 
-    # Only append if not already present
     if not any(p['projectName'] == project_name for p in projects):
         projects.append({
             "projectName": project_name,

@@ -67,6 +67,25 @@ def fetch_iterations(project):
         return None, {"error": "Failed to fetch iterations"}
     return resp.json().get("value", []), None
 
+def fetch_wiki_pages(project):
+    """
+    Fetch wiki pages from Azure DevOps for a given project.
+    The wiki URL should be in data/{project}/urls.json as "wiki-pages" and is used as is.
+    """
+    project_info = get_project_info(project)
+    if not project_info:
+        return None, {"error": f"Project '{project}' not found in projects.json"}
+    api_urls, error = load_api_urls(project)
+    if error:
+        return None, error
+    wiki_url = api_urls.get("wiki-pages")
+    if not wiki_url:
+        return None, {"error": "wiki-pages URL not found in urls.json"}
+    resp = requests.get(wiki_url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": "Failed to fetch wiki pages"}
+    return resp.json(), None
+
 def fetch_pipeline_releases(start, end, project):
     project_info = get_project_info(project)
     if not project_info:

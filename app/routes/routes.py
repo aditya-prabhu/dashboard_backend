@@ -5,11 +5,13 @@ from typing import List
 import os
 import json
 import re
+import urllib.parse
 from app.utils.fetch_data import (
     fetch_pipeline_releases, fetch_iterations,
     # fetch_wiql_url, fetch_release_plan_work_items
     fetch_iteration_work_items, fetch_work_items,
-    fetch_project_names, fetch_pipeline_releases_by_definition
+    fetch_project_names, fetch_pipeline_releases_by_definition,
+    fetch_wiki_pages
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -54,6 +56,33 @@ async def get_iterations(
         }
         for it in filtered_iterations[-10:]
     ]
+
+    wiki_result, error = fetch_wiki_pages(project)
+    wiki_pages = []
+    if not error and wiki_result and "subPages" in wiki_result:
+        wiki_pages = [
+            page for page in wiki_result["subPages"]
+            if "order" in page and "path" in page and "remoteUrl" in page
+            and "hotfix" not in page["path"].lower()
+        ]
+        wiki_pages = sorted(wiki_pages, key=lambda x: x["order"])
+
+    for release in release_data:
+        release["ReleaseNotesUrl"] = None
+        matched = False
+        for wiki in wiki_pages:
+            decoded_path = urllib.parse.unquote(wiki["path"])
+            if release["name"].lower().replace(" ", "") in decoded_path.lower().replace(" ", ""):
+                release["ReleaseNotesUrl"] = wiki["remoteUrl"]
+                matched = True
+                break
+        if not matched and wiki_pages:
+            remote_url = wiki_pages[0]["remoteUrl"]
+            if "%2F" in remote_url:
+                release["ReleaseNotesUrl"] = remote_url.rsplit("%2F", 1)[0]
+            else:
+                release["ReleaseNotesUrl"] = remote_url
+
     return JSONResponse(content=release_data)
 
 

@@ -3,5 +3,6 @@
     "iterations-list": "https://dev.azure.com/PSJH/Administrative%20Technology/{teamName}/_apis/work/teamsettings/iterations?&api-version=7.1",
     "wiql-url": "https://dev.azure.com/PSJH/1b24dd3b-420d-469b-a3d3-b3e04acc5cc0/_apis/wit/wiql/f15729e0-53bd-4525-b9cb-3f3db9af8bff?api-version=7.1",
     "iteration-work-items": "https://dev.azure.com/PSJH/Administrative%20Technology/{teamName}/_apis/work/teamsettings/iterations/{iterationId}/workitems?api-version=7.2-preview.1",
-    "work-items": " https://dev.azure.com/PSJH/Administrative%20Technology/_apis/wit/workitems?{workItemIds}&api-version=7.2-preview.3"
+    "work-items": " https://dev.azure.com/PSJH/Administrative%20Technology/_apis/wit/workitems?{workItemIds}&api-version=7.2-preview.3",
+    "wiki-pages": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/wiki/wikis/Administrative-Technologies.wiki/pages?path=Applications/HR and Onboarding/Onboard ME/Releases &recursionLevel=OneLevel&api-version=7.1"
 }
