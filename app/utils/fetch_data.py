@@ -54,7 +54,7 @@ def fetch_project_names():
         projects = json.load(f)
     return [p.get("projectName") for p in projects if "projectName" in p]
 
-def fetch_releases(project):
+def fetch_iterations(project):
     project_info = get_project_info(project)
     if not project_info:
         return None, {"error": f"Project '{project}' not found in projects.json"}

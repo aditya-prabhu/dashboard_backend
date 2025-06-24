@@ -6,7 +6,7 @@ import os
 import json
 import re
 from app.utils.fetch_data import (
-    fetch_pipeline_releases, fetch_releases,
+    fetch_pipeline_releases, fetch_iterations,
     # fetch_wiql_url, fetch_release_plan_work_items
     fetch_iteration_work_items, fetch_work_items,
     fetch_project_names, fetch_pipeline_releases_by_definition
@@ -30,14 +30,14 @@ async def get_projects():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/api/releases",
+@router.get("/api/iterations",
             description="Fetches release data for current and past iterations",
             response_description="List of releases with their details"
 )
-async def get_releases(
+async def get_iterations(
     project: str = Query(..., description="Project name, e.g., 'CHMP'")
 ):
-    iterations, error = fetch_releases(project)
+    iterations, error = fetch_iterations(project)
     if error:
         raise HTTPException(status_code=500, detail=error)
     
