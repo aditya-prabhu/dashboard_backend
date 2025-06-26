@@ -258,15 +258,18 @@ def fetch_release_work_items(release_id, project_name):
 
     # 2. Extract buildId from artifacts
     build_id = None
-    for artifact in release_json.get("artifacts", []):
-        def_ref = artifact.get("definitionReference", {})
-        build_uri = def_ref.get("buildUri", {}).get("id", "")
-        # Extract the build number from "vstfs:///Build/Build/716812"
-        if build_uri.startswith("vstfs:///Build/Build/"):
-            build_id = build_uri.split("/")[-1]
-            break
-    if not build_id:
-        return None, {"error": "Build ID not found in release artifacts."}
+    if(release_json.get("artifacts",[])):
+        for artifact in release_json.get("artifacts", []):
+            def_ref = artifact.get("definitionReference", {})
+            build_uri = def_ref.get("buildUri", {}).get("id", "")
+            # Extract the build number from "vstfs:///Build/Build/716812"
+            if build_uri.startswith("vstfs:///Build/Build/"):
+                build_id = build_uri.split("/")[-1]
+                break
+    # if not build_id:
+    #     return None, {"error": "Build ID not found in release artifacts."}
+    else:
+        return [], None
 
     # 3. Call release-workItems API
     release_workitems_url = api_urls["release-workItems"].replace("{buildId}", str(build_id))
