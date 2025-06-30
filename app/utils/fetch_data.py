@@ -300,10 +300,31 @@ def fetch_release_work_items(release_id, project_name):
 
         })
     return results, None
+    
+def fetch_release_definition(project_name, definition_id):
+    """
+    Fetch release definition details for a given project and definitionId.
 
-# Example usage:
-# pat = "<base64 encoded PAT or use requests.auth.HTTPBasicAuth if preferred>"
-# print(get_release_work_items(123456, "CHMP", pat))
+    Args:
+        project_name (str): The name of the project.
+        definition_id (str or int): The release definition ID.
+
+    Returns:
+        tuple: (response JSON dict, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    url_template = api_urls.get("release-definition")
+    if not url_template:
+        return None, {"error": "release-definition URL not found in urls.json"}
+
+    url = url_template.replace("{definitionId}", str(definition_id))
+    resp = requests.get(url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch release definition {definition_id}"}
+    return resp.json(), None
 
 # def fetch_wiql_url(project):
 #     api_urls, error = load_api_urls(project)

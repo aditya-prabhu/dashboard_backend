@@ -11,7 +11,8 @@ from app.utils.fetch_data import (
     # fetch_wiql_url, fetch_release_plan_work_items
     fetch_iteration_work_items, fetch_work_items,
     fetch_project_names, fetch_pipeline_releases_by_definition,
-    fetch_wiki_pages, fetch_release_work_items
+    fetch_wiki_pages, fetch_release_work_items,
+    fetch_release_definition
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -438,13 +439,15 @@ async def get_project_info(project_name: str = Query(..., description="Project n
                             "title": "Fix login bug",
                             "state": "Closed",
                             "reason": "Completed",
-                            "assignedTo": "Jane Doe"
+                            "assignedTo": "Jane Doe",
+                            "htmlUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/238567"
                         },
                         {
                             "title": "Add new dashboard",
                             "state": "Active",
                             "reason": "Work started",
-                            "assignedTo": "John Smith"
+                            "assignedTo": "John Smith",
+                            "htmlUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/2385644"
                         }
                     ]
                 }
@@ -460,6 +463,58 @@ async def get_release_work_items(
     if error:
         raise HTTPException(status_code=500, detail=error)
     return JSONResponse(content=work_items)
+
+
+@router.get(
+    "/api/deployed-environments",
+    description="Fetches environments for a release definition and returns environment name and release progress URL",
+    response_description="List of environments with their current release progress URLs",
+    responses={
+        200: {
+            "description": "List of environments with release progress URLs",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "environmentName": "Dev",
+                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12345"
+                        },
+                        {
+                            "environmentName": "QA",
+                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12346"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
+async def get_deployed_environments(
+    project: str = Query(..., description="Project name, e.g., 'CHMP'"),
+    definitionId: int = Query(..., description="Release definition ID")
+):
+    data, error = fetch_release_definition(project, definitionId)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+
+    environments = data.get("environments", [])
+    result = []
+    for env in environments:
+        env_name = env.get("name")
+        current_release = env.get("currentRelease")
+        if env_name and current_release and current_release.get("id"):
+            release_id = current_release["id"]
+            release_progress_url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId={release_id}"
+            result.append({
+                "environmentName": env_name,
+                "releaseUrl": release_progress_url
+            })
+    pipeline_url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId={definitionId}"
+    return JSONResponse(content={
+        "environments": result,
+        "pipelineUrl": pipeline_url
+    })
+
 
 # def parse_html_for_release_notes(item_data):
 #     release_notes_html = item_data['fields'].get('Custom.ReleaseNotes', '')
