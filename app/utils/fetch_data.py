@@ -326,6 +326,48 @@ def fetch_release_definition(project_name, definition_id):
         return None, {"error": f"Failed to fetch release definition {definition_id}"}
     return resp.json(), None
 
+
+def fetch_pending_approvals_from_pipelines(start, end, project):
+    """
+    Fetches all pending approvals for all releases in a project within a date range.
+
+    Args:
+        start (str): Start date (ISO format).
+        end (str): End date (ISO format).
+        project (str): The name of the project.
+
+    Returns:
+        tuple: (list of pending approvals, error dict or None)
+    """
+    # 1. Fetch pipeline releases
+    releases, error = fetch_pipeline_releases(start, end, project)
+    if error:
+        return None, error
+
+    # 2. Collect all releaseIds
+    release_ids = [str(item["id"]) for item in releases if "id" in item]
+    if not release_ids:
+        return [], None
+
+    # 3. Load approvals URL from urls.json
+    api_urls, error = load_api_urls(project)
+    if error:
+        return None, error
+    approvals_url_template = api_urls.get("pending-approvals")
+    if not approvals_url_template:
+        return None, {"error": "pending-approvals URL not found in urls.json"}
+
+    # 4. Prepare approvals URL
+    release_ids_str = ",".join(release_ids)
+    approvals_url = approvals_url_template.replace("{releaseIds}", release_ids_str)
+
+    # 5. Call the approvals API
+    resp = requests.get(approvals_url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": "Failed to fetch pending approvals"}
+    approvals = resp.json().get("value", [])
+    return approvals, None
+
 # def fetch_wiql_url(project):
 #     api_urls, error = load_api_urls(project)
 #     if error:

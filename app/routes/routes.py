@@ -12,7 +12,7 @@ from app.utils.fetch_data import (
     fetch_iteration_work_items, fetch_work_items,
     fetch_project_names, fetch_pipeline_releases_by_definition,
     fetch_wiki_pages, fetch_release_work_items,
-    fetch_release_definition
+    fetch_release_definition, fetch_pending_approvals_from_pipelines
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -509,6 +509,7 @@ async def get_deployed_environments(
                 "environmentName": env_name,
                 "releaseUrl": release_progress_url
             })
+            
     pipeline_url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId={definitionId}"
     return JSONResponse(content={
         "environments": result,
@@ -516,6 +517,76 @@ async def get_deployed_environments(
     })
 
 
+@router.get(
+    "/api/pending-approvals",
+    description="Returns pending approvals with pipeline, environment, approver, and createdOn info for a project and date range",
+    response_description="List of pending approvals with pipeline and environment details",
+    responses={
+        200: {
+            "description": "List of pending approvals summary",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "pipelineName": "AT_MAP_BusinessProcess_SVC_CD",
+                            "environmentName": "PR to Archive Branch",
+                            "approver": "[TEAM FOUNDATION]\\AT-CHMP Service Engineering",
+                            "createdOn": "2025-06-29T04:40:48.623Z",
+                            "pipelineUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId=285",
+                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=43354"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
+async def get_pending_approvals_summary(
+    startDate: str = Query(..., description="Start date"),
+    endDate: str = Query(..., description="End date"),
+    project: str = Query(..., description="Project name, e.g., 'CHMP'")
+):
+    # Fetch pending approvals using the utility function
+    approvals, error = fetch_pending_approvals_from_pipelines(startDate, endDate, project)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+
+    # Fetch pipeline releases to map releaseId to pipelineUrl/releaseUrl
+    releases, rel_error = fetch_pipeline_releases(startDate, endDate, project)
+    release_lookup = {}
+    if not rel_error:
+        for rel in releases:
+            release_lookup[str(rel["id"])] = {
+                "definitionId": rel["releaseDefinition"]["id"],
+                "pipelineUrl": f"https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId={rel['releaseDefinition']['id']}",
+                "releaseUrl": f"https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId={rel['id']}"
+            }
+
+    results = []
+    for item in approvals:
+        pipeline_name = item.get("releaseDefinition", {}).get("name")
+        environment_name = item.get("releaseEnvironment", {}).get("name")
+        approver = item.get("approver", {}).get("displayName")
+        created_on = item.get("createdOn")
+        definition_id = item.get("releaseDefinition", {}).get("id")
+        release_id = str(item.get("release", {}).get("id"))
+        pipeline_url = release_url = None
+        if release_id in release_lookup:
+            pipeline_url = release_lookup[release_id]["pipelineUrl"]
+            release_url = release_lookup[release_id]["releaseUrl"]
+        else:
+            pipeline_url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId={definition_id}"
+            release_url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId={release_id}"
+
+        results.append({
+            "pipelineName": pipeline_name,
+            "environmentName": environment_name,
+            "approver": approver,
+            "createdOn": created_on,
+            "pipelineUrl": pipeline_url,
+            "releaseUrl": release_url
+        })
+    return JSONResponse(content=results)
 # def parse_html_for_release_notes(item_data):
 #     release_notes_html = item_data['fields'].get('Custom.ReleaseNotes', '')
 #     match = re.search(r'href="(.*?)"', release_notes_html)

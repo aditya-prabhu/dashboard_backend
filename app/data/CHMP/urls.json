@@ -3,6 +3,7 @@
     "single-release": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/releases/{releaseId}?api-version=7.2-preview.9",
     "release-workItems": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/build/builds/{buildId}/workitems?api-version=7.2-preview.2",
     "release-definition": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/definitions/{definitionId}?api-version=7.1",
+    "pending-approvals": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/approvals?statusFilter=pending&releaseIdsFilter={releaseIds}&api-version=7.2-preview.3",
     "iterations-list": "https://dev.azure.com/PSJH/Administrative%20Technology/{teamName}/_apis/work/teamsettings/iterations?&api-version=7.1",
     "wiql-url": "https://dev.azure.com/PSJH/1b24dd3b-420d-469b-a3d3-b3e04acc5cc0/_apis/wit/wiql/f15729e0-53bd-4525-b9cb-3f3db9af8bff?api-version=7.1",
     "iteration-work-items": "https://dev.azure.com/PSJH/Administrative%20Technology/{teamName}/_apis/work/teamsettings/iterations/{iterationId}/workitems?api-version=7.2-preview.1",
