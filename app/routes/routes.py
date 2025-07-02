@@ -191,7 +191,7 @@ async def get_pipeline_data(
     return JSONResponse(content=result)
 
 
-@router.get("/api/pipelines-by-definition",
+@router.get("/api/pipelines-runs",
     description="Fetches pipeline data for a specific definitionId within a specified date range",
     response_description="List of pipelines with their details",
     responses={
@@ -226,7 +226,7 @@ async def get_pipeline_data(
         }
     }
 )
-async def get_pipeline_data_by_definition(
+async def get_pipeline_runs(
     startDate: str = Query(..., description="Start date"),
     endDate: str = Query(..., description="End date"),
     project: str = Query(..., description="Project name, e.g., 'CHMP'"),
@@ -238,10 +238,11 @@ async def get_pipeline_data_by_definition(
     data, error = fetch_pipeline_releases_by_definition(startDate, endDate, project, definitionId)
     if error:
         raise HTTPException(status_code=500, detail=error)
+    print(data[0]['name'])
     result = [
         {
             "releaseId": item["id"],
-            "name": item["releaseDefinition"]["name"],
+            "name": item["name"],
             "path": item["releaseDefinition"]["path"],
             "status": item["status"],
             "createdOn": item["createdOn"],
