@@ -238,11 +238,11 @@ async def get_pipeline_runs(
     data, error = fetch_pipeline_releases_by_definition(startDate, endDate, project, definitionId)
     if error:
         raise HTTPException(status_code=500, detail=error)
-    print(data[0]['name'])
     result = [
         {
             "releaseId": item["id"],
-            "name": item["name"],
+            "pipelineName": item["releaseDefinition"]["name"],
+            "releaseName": item["name"],
             "path": item["releaseDefinition"]["path"],
             "status": item["status"],
             "createdOn": item["createdOn"],
