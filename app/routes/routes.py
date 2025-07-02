@@ -509,6 +509,7 @@ async def get_deployed_environments(
             release_progress_url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId={release_id}"
             result.append({
                 "environmentName": env_name,
+                "releaseId": release_id,
                 "releaseUrl": release_progress_url
             })
             
@@ -662,7 +663,7 @@ async def get_github_commit_url(
     if error:
         raise HTTPException(status_code=404, detail=error)
     return JSONResponse(content={"commitUrl": commit_url})
-    
+
 # def parse_html_for_release_notes(item_data):
 #     release_notes_html = item_data['fields'].get('Custom.ReleaseNotes', '')
 #     match = re.search(r'href="(.*?)"', release_notes_html)
