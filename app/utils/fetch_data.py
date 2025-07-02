@@ -239,7 +239,7 @@ def fetch_work_items(work_item_ids, project="CHMP"):
 
 def fetch_release_work_items(release_id, project_name):
     """
-    Given a releaseId and projectName, fetch work item details for the release.
+    Given a releaseId and projectName, fetch work item details for all builds in the release.
     Returns a list of dicts with title, state, reason, and assignedTo.
     """
     api_urls, error = load_api_urls(project_name)
@@ -257,49 +257,43 @@ def fetch_release_work_items(release_id, project_name):
         return None, {"error": f"Failed to fetch release {release_id}"}
     release_json = resp.json()
 
-    # 2. Extract buildId from artifacts
-    build_id = None
-    if(release_json.get("artifacts",[])):
-        for artifact in release_json.get("artifacts", []):
-            def_ref = artifact.get("definitionReference", {})
-            build_uri = def_ref.get("buildUri", {}).get("id", "")
-            # Extract the build number from "vstfs:///Build/Build/716812"
-            if build_uri.startswith("vstfs:///Build/Build/"):
-                build_id = build_uri.split("/")[-1]
-                break
-    # if not build_id:
-    #     return None, {"error": "Build ID not found in release artifacts."}
-    else:
+    # 2. Extract all buildIds from artifacts
+    build_ids = []
+    for artifact in release_json.get("artifacts", []):
+        def_ref = artifact.get("definitionReference", {})
+        build_uri = def_ref.get("buildUri", {}).get("id", "")
+        if build_uri.startswith("vstfs:///Build/Build/"):
+            build_id = build_uri.split("/")[-1]
+            build_ids.append(build_id)
+    if not build_ids:
         return [], None
 
-    # 3. Call release-workItems API
-    release_workitems_url = api_urls["release-workItems"].replace("{buildId}", str(build_id))
-    workitems_resp = requests.get(release_workitems_url, auth=AUTH, headers=headers)
-    if workitems_resp.status_code != 200:
-        return None, {"error": f"Failed to fetch work items for build {build_id}"}
-    workitems_json = workitems_resp.json()
-
-    # 4. For each work item, fetch details
+    # 3. For each buildId, call release-workItems API and collect work items
     results = []
-    for item in workitems_json.get("value", []):
-        wi_url = item["url"]
-        wi_resp = requests.get(wi_url, auth=AUTH, headers=headers)
-        if wi_resp.status_code != 200:
+    for build_id in build_ids:
+        release_workitems_url = api_urls["release-workItems"].replace("{buildId}", str(build_id))
+        workitems_resp = requests.get(release_workitems_url, auth=AUTH, headers=headers)
+        if workitems_resp.status_code != 200:
             continue
-        wi_json = wi_resp.json()
-        fields = wi_json.get("fields", {})
-        results.append({
-            "title": fields.get("System.Title"),
-            "state": fields.get("System.State"),
-            "reason": fields.get("System.Reason"),
-            "assignedTo": (
-                fields.get("System.AssignedTo", {}).get("displayName")
-                if isinstance(fields.get("System.AssignedTo"), dict)
-                else fields.get("System.AssignedTo")
-            ),
-            "htmlUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/{}".format(item["id"])
-
-        })
+        workitems_json = workitems_resp.json()
+        for item in workitems_json.get("value", []):
+            wi_url = item["url"]
+            wi_resp = requests.get(wi_url, auth=AUTH, headers=headers)
+            if wi_resp.status_code != 200:
+                continue
+            wi_json = wi_resp.json()
+            fields = wi_json.get("fields", {})
+            results.append({
+                "title": fields.get("System.Title"),
+                "state": fields.get("System.State"),
+                "reason": fields.get("System.Reason"),
+                "assignedTo": (
+                    fields.get("System.AssignedTo", {}).get("displayName")
+                    if isinstance(fields.get("System.AssignedTo"), dict)
+                    else fields.get("System.AssignedTo")
+                ),
+                "htmlUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/{}".format(item["id"])
+            })
     return results, None
     
 def fetch_release_definition(project_name, definition_id):
@@ -436,6 +430,48 @@ def fetch_azure_url(url):
     if resp.status_code != 200:
         return None, {"error": f"Failed to fetch data from {url}: {resp.text}"}
     return resp.json(), None
+
+def fetch_github_commit_url_from_release(release_id, project_name):
+    """
+    Given a releaseId and projectName, fetch the GitHub commit URL if the release's repository provider is GitHub.
+
+    Args:
+        release_id (str or int): The release ID.
+        project_name (str): The project name.
+
+    Returns:
+        tuple: (commit_url or None, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    headers = {
+        "Accept": "application/json"
+    }
+
+    # 1. Call single-release API
+    single_release_url = api_urls["single-release"].replace("{releaseId}", str(release_id))
+    resp = requests.get(single_release_url, auth=AUTH, headers=headers)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch release {release_id}"}
+    release_json = resp.json()
+
+    # 2. Check if repository.provider.id is GitHub and extract repo name and commit id
+    for artifact in release_json.get("artifacts", []):
+        def_ref = artifact.get("definitionReference", {})   
+        repo_provider_obj = def_ref.get("repository.provider", {})
+        repo_provider_id = repo_provider_obj.get("id", "") if isinstance(repo_provider_obj, dict) else ""
+        print(repo_provider_id)
+        if repo_provider_id.lower() == "github":
+            repo_name = def_ref.get("repository", {}).get("name")
+            print(repo_name)
+            source_version = def_ref.get("sourceVersion").get("id")
+            print(source_version)
+            if repo_name and source_version:
+                commit_url = f"https://github.com/{repo_name}/commit/{source_version}"
+                return commit_url, None
+    return None, {"error": "No GitHub repository artifact found in release or missing data"}
 
 # def fetch_wiql_url(project):
 #     api_urls, error = load_api_urls(project)

@@ -13,7 +13,7 @@ from app.utils.fetch_data import (
     fetch_project_names, fetch_pipeline_releases_by_definition,
     fetch_wiki_pages, fetch_release_work_items,
     fetch_release_definition, fetch_pending_approvals_from_pipelines,
-    fetch_release_plan, fetch_azure_url
+    fetch_release_plan, fetch_azure_url, fetch_github_commit_url_from_release
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -636,6 +636,33 @@ async def get_release_plan_work_items(
             })
     return JSONResponse(content=results)
 
+
+@router.get(
+    "/api/github-commit-url",
+    description="Fetches the GitHub commit URL for a release if the repository provider is GitHub",
+    response_description="GitHub commit URL for the release",
+    responses={
+        200: {
+            "description": "GitHub commit URL for the release",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "commitUrl": "https://github.com/PSJH/AT_MCE_CHMP/commit/debfd1e9b43735a5696cb5c478fddfcb802d0310"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_github_commit_url(
+    release_id: int = Query(..., description="Release ID"),
+    project: str = Query(..., description="Project name, e.g., 'CHMP'")
+):
+    commit_url, error = fetch_github_commit_url_from_release(release_id, project)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
+    return JSONResponse(content={"commitUrl": commit_url})
+    
 # def parse_html_for_release_notes(item_data):
 #     release_notes_html = item_data['fields'].get('Custom.ReleaseNotes', '')
 #     match = re.search(r'href="(.*?)"', release_notes_html)
