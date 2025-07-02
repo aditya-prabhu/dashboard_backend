@@ -12,7 +12,8 @@ from app.utils.fetch_data import (
     fetch_iteration_work_items, fetch_work_items,
     fetch_project_names, fetch_pipeline_releases_by_definition,
     fetch_wiki_pages, fetch_release_work_items,
-    fetch_release_definition, fetch_pending_approvals_from_pipelines
+    fetch_release_definition, fetch_pending_approvals_from_pipelines,
+    fetch_release_plan, fetch_azure_url
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -587,6 +588,53 @@ async def get_pending_approvals_summary(
             "releaseUrl": release_url
         })
     return JSONResponse(content=results)
+
+
+@router.get(
+    "/api/release-plan-work-items",
+    description="Fetches work items from the release plan using tags and WIQL API as defined in urls.json for the project, and returns their title and web URL",
+    response_description="List of work item titles and URLs matching the tags in urls.json",
+    responses={
+        200: {
+            "description": "List of work item titles and URLs matching the tags",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "title": "Release: Sprint 13",
+                            "webUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/12345"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
+async def get_release_plan_work_items(
+    project: str = Query(..., description="Project name, e.g., 'CHMP'")
+):
+    import requests
+
+    work_item_objs, error = fetch_release_plan(project)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+    results = []
+    for item in work_item_objs:
+        url = item.get("url")
+        if not url:
+            continue
+        data, error = fetch_azure_url(url)
+        if error:
+            raise HTTPException(status_code=500, detail=error)
+        title = data.get("fields", {}).get("System.Title")
+        web_url = data.get("_links", {}).get("html", {}).get("href")
+        if title and web_url:
+            results.append({
+                "title": title,
+                "webUrl": web_url
+            })
+    return JSONResponse(content=results)
+
 # def parse_html_for_release_notes(item_data):
 #     release_notes_html = item_data['fields'].get('Custom.ReleaseNotes', '')
 #     match = re.search(r'href="(.*?)"', release_notes_html)

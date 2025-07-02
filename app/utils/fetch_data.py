@@ -3,6 +3,7 @@ import os
 import json
 from dotenv import load_dotenv
 import re
+import base64
 
 load_dotenv()
 
@@ -367,6 +368,74 @@ def fetch_pending_approvals_from_pipelines(start, end, project):
         return None, {"error": "Failed to fetch pending approvals"}
     approvals = resp.json().get("value", [])
     return approvals, None
+
+def fetch_release_plan(project):
+    """
+    Fetch work items from Azure DevOps WIQL API that have all the tags specified in /data/{project}/urls.json.
+
+    Args:
+        project (str): The project name.
+
+    Returns:
+        tuple: (list of work item IDs, error dict or None)
+    """
+    api_urls, error = load_api_urls(project)
+    if error:
+        return None, error
+
+    wiql_url = api_urls.get("wiql-url")
+    tags = api_urls.get("tags", [])
+    if not wiql_url:
+        return None, {"error": "wiql-url not found in urls.json"}
+    if not tags:
+        return None, {"error": "tags not found in urls.json"}
+
+    tag_filters = "".join([f"\n    AND [System.Tags] CONTAINS '{tag}'" for tag in tags])
+    wiql_query = f"""
+        SELECT
+            [System.Id],
+            [System.WorkItemType],
+            [System.Title],
+            [System.AssignedTo],
+            [System.State],
+            [System.Tags]
+        FROM workitems
+        WHERE
+            [System.TeamProject] = 'Administrative Technology'
+            {tag_filters}
+    """
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    resp = requests.post(
+        wiql_url,
+        auth=AUTH,
+        headers=headers,
+        json={"query": wiql_query}
+    )
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch work items by tags: {resp.text}"}
+    work_items = resp.json().get("workItems", [])
+    #work_item_ids = [item["id"] for item in work_items]
+    return work_items[-10:], None
+
+def fetch_azure_url(url):
+    """
+    Fetches and returns the JSON response from a given Azure DevOps API URL.
+
+    Args:
+        url (str): The Azure DevOps API URL.
+
+    Returns:
+        tuple: (response JSON dict, error dict or None)
+    """
+    resp = requests.get(url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch data from {url}: {resp.text}"}
+    return resp.json(), None
 
 # def fetch_wiql_url(project):
 #     api_urls, error = load_api_urls(project)
