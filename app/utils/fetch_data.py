@@ -168,7 +168,7 @@ def fetch_pipeline_releases(start, end, project):
             if resp.status_code == 200:
                 all_releases.extend(resp.json().get("value", []))
 
-    # 2. Fetch by path (original behavior)
+    # 2. Fetch by path
     params = {
         "minCreatedTime": start,
         "maxCreatedTime": end,
