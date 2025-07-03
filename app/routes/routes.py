@@ -18,7 +18,7 @@ from app.utils.fetch_data import (
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
-    create_project_directory_and_urls,
+    create_project_directory,
     append_project_to_projects_json
 )
 
@@ -362,8 +362,8 @@ async def get_iteration_work_items(
 )
 async def create_project(req: ProjectCreateRequest):
     project_name = req.project_name.strip()
-    pipelines = req.pipelines
-    releases = req.releases
+    release_links = req.releases
+    tags = getattr(req, "tags", [])
     team_name = req.teamName.strip()
     path = req.path.strip()
 
@@ -371,7 +371,7 @@ async def create_project(req: ProjectCreateRequest):
         raise HTTPException(status_code=400, detail="Project name, team name, and path are required.")
 
     try:
-        create_project_directory_and_urls(project_name, pipelines, releases)
+        create_project_directory(project_name, release_links, tags)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create project directory or urls.json: {e}")
 
@@ -392,14 +392,19 @@ async def create_project(req: ProjectCreateRequest):
                 "application/json": {
                     "example": {
                         "urls": {
-                            "all-releases": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/releases",
-                            "single-release": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/releases/{releaseId}?api-version=7.2-preview.9",
-                            "release-workItems": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/build/builds/{buildId}/workitems?api-version=7.2-preview.2",
-                            "iterations-list": "https://dev.azure.com/PSJH/Administrative%20Technology/{teamName}/_apis/work/teamsettings/iterations?&api-version=7.1",
-                            "wiql-url": "https://dev.azure.com/PSJH/1b24dd3b-420d-469b-a3d3-b3e04acc5cc0/_apis/wit/wiql/f15729e0-53bd-4525-b9cb-3f3db9af8bff?api-version=7.1",
-                            "iteration-work-items": "https://dev.azure.com/PSJH/Administrative%20Technology/{teamName}/_apis/work/teamsettings/iterations/{iterationId}/workitems?api-version=7.2-preview.1",
-                            "work-items": " https://dev.azure.com/PSJH/Administrative%20Technology/_apis/wit/workitems?{workItemIds}&api-version=7.2-preview.3",
-                            "wiki-pages": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/wiki/wikis/Administrative-Technologies.wiki/pages?path=Applications/HR and Onboarding/Caregiver Health Services/Release Notes&recursionLevel=OneLevel&api-version=7.1"
+                            "all-releases": "...",
+                            "single-release": "...",
+                            "release-workItems": "...",
+                            "iterations-list": "...",
+                            "wiql-url": "...",
+                            "iteration-work-items": "...",
+                            "work-items": "...",
+                            "wiki-pages": "...",
+                            "releases": [
+                                "https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId=281",
+                                "https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId=282"
+                            ],
+                            "tags": ["OnboardMe", "Release Plan"]
                         },
                         "project": {
                             "projectName": "CHMP",
@@ -434,11 +439,18 @@ async def get_project_info(project_name: str = Query(..., description="Project n
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading projects.json: {e}")
 
+    releases_links = []
+    if "definition-ids" in urls_data:
+        releases_links = [
+            f"https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId={id}"
+            for id in urls_data["definition-ids"]
+        ]
+    urls_data["releases"] = releases_links
+
     return JSONResponse(content={
         "urls": urls_data,
         "project": project_meta
     })
-
 @router.get(
     "/api/release-work-items",
     description="Fetches work item details attached to a release",

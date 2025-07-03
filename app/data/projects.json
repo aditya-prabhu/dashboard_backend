@@ -8,5 +8,10 @@
         "projectName": "OnboardMe",
         "path": "OnboardMe-CD",
         "teamName": "OnboardMe"
+    },
+    {
+        "projectName": "test",
+        "path": "test team path",
+        "teamName": "test team"
     }
 ]
