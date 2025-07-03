@@ -177,14 +177,14 @@ def fetch_pipeline_releases_by_definition(start, end, project, definition_id):
         return None, {"error": f"Project '{project}' not found in projects.json"}
     params = {
         "definitionId": definition_id,
-        "minCreatedTime": start,
-        "maxCreatedTime": end,
+        "minStartedTime": start,
+        "maxStartedTime": end,
         "api-version": "7.1"
     }
     api_urls, error = load_api_urls(project)
     if error:
         return None, error
-    url = api_urls["all-releases"].format(**project_info)
+    url = api_urls["pipeline-runs"].format(**project_info)
     resp = requests.get(url, params=params, auth=AUTH, headers=HEADERS)
     if resp.status_code != 200:
         return None, {"error": "Failed to fetch release data"}
@@ -431,47 +431,47 @@ def fetch_azure_url(url):
         return None, {"error": f"Failed to fetch data from {url}: {resp.text}"}
     return resp.json(), None
 
-def fetch_github_commit_url_from_release(release_id, project_name):
-    """
-    Given a releaseId and projectName, fetch the GitHub commit URL if the release's repository provider is GitHub.
+# def fetch_github_commit_url_from_release(release_id, project_name):
+#     """
+#     Given a releaseId and projectName, fetch the GitHub commit URL if the release's repository provider is GitHub.
 
-    Args:
-        release_id (str or int): The release ID.
-        project_name (str): The project name.
+#     Args:
+#         release_id (str or int): The release ID.
+#         project_name (str): The project name.
 
-    Returns:
-        tuple: (commit_url or None, error dict or None)
-    """
-    api_urls, error = load_api_urls(project_name)
-    if error:
-        return None, error
+#     Returns:
+#         tuple: (commit_url or None, error dict or None)
+#     """
+#     api_urls, error = load_api_urls(project_name)
+#     if error:
+#         return None, error
 
-    headers = {
-        "Accept": "application/json"
-    }
+#     headers = {
+#         "Accept": "application/json"
+#     }
 
-    # 1. Call single-release API
-    single_release_url = api_urls["single-release"].replace("{releaseId}", str(release_id))
-    resp = requests.get(single_release_url, auth=AUTH, headers=headers)
-    if resp.status_code != 200:
-        return None, {"error": f"Failed to fetch release {release_id}"}
-    release_json = resp.json()
+#     # 1. Call single-release API
+#     single_release_url = api_urls["single-release"].replace("{releaseId}", str(release_id))
+#     resp = requests.get(single_release_url, auth=AUTH, headers=headers)
+#     if resp.status_code != 200:
+#         return None, {"error": f"Failed to fetch release {release_id}"}
+#     release_json = resp.json()
 
-    # 2. Check if repository.provider.id is GitHub and extract repo name and commit id
-    for artifact in release_json.get("artifacts", []):
-        def_ref = artifact.get("definitionReference", {})   
-        repo_provider_obj = def_ref.get("repository.provider", {})
-        repo_provider_id = repo_provider_obj.get("id", "") if isinstance(repo_provider_obj, dict) else ""
-        print(repo_provider_id)
-        if repo_provider_id.lower() == "github":
-            repo_name = def_ref.get("repository", {}).get("name")
-            print(repo_name)
-            source_version = def_ref.get("sourceVersion").get("id")
-            print(source_version)
-            if repo_name and source_version:
-                commit_url = f"https://github.com/{repo_name}/commit/{source_version}"
-                return commit_url, None
-    return None, {"error": "No GitHub repository artifact found in release or missing data"}
+#     # 2. Check if repository.provider.id is GitHub and extract repo name and commit id
+#     for artifact in release_json.get("artifacts", []):
+#         def_ref = artifact.get("definitionReference", {})   
+#         repo_provider_obj = def_ref.get("repository.provider", {})
+#         repo_provider_id = repo_provider_obj.get("id", "") if isinstance(repo_provider_obj, dict) else ""
+#         print(repo_provider_id)
+#         if repo_provider_id.lower() == "github":
+#             repo_name = def_ref.get("repository", {}).get("name")
+#             print(repo_name)
+#             source_version = def_ref.get("sourceVersion").get("id")
+#             print(source_version)
+#             if repo_name and source_version:
+#                 commit_url = f"https://github.com/{repo_name}/commit/{source_version}"
+#                 return commit_url, None
+#     return None, {"error": "No GitHub repository artifact found in release or missing data"}
 
 # def fetch_wiql_url(project):
 #     api_urls, error = load_api_urls(project)

@@ -3,6 +3,7 @@
     "single-release": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/releases/{releaseId}?api-version=7.2-preview.9",
     "release-workItems": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/build/builds/{buildId}/workitems?api-version=7.2-preview.2",
     "release-definition": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/definitions/{definitionId}?api-version=7.1",
+    "pipeline-runs": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/deployments",
     "pending-approvals": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/approvals?statusFilter=pending&releaseIdsFilter={releaseIds}&api-version=7.2-preview.3",
     "iterations-list": "https://dev.azure.com/PSJH/Administrative%20Technology/{teamName}/_apis/work/teamsettings/iterations?&api-version=7.1",
     "iteration-work-items": "https://dev.azure.com/PSJH/Administrative%20Technology/{teamName}/_apis/work/teamsettings/iterations/{iterationId}/workitems?api-version=7.2-preview.1",

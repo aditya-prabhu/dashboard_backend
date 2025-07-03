@@ -6,6 +6,7 @@ import os
 import json
 import re
 import urllib.parse
+from dateutil.parser import parse as parse_datetime
 from app.utils.fetch_data import (
     fetch_pipeline_releases, fetch_iterations,
     # fetch_wiql_url, fetch_release_plan_work_items
@@ -13,7 +14,7 @@ from app.utils.fetch_data import (
     fetch_project_names, fetch_pipeline_releases_by_definition,
     fetch_wiki_pages, fetch_release_work_items,
     fetch_release_definition, fetch_pending_approvals_from_pipelines,
-    fetch_release_plan, fetch_azure_url, fetch_github_commit_url_from_release
+    fetch_release_plan, fetch_azure_url #, fetch_github_commit_url_from_release
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -238,20 +239,40 @@ async def get_pipeline_runs(
     data, error = fetch_pipeline_releases_by_definition(startDate, endDate, project, definitionId)
     if error:
         raise HTTPException(status_code=500, detail=error)
-    result = [
-        {
-            "releaseId": item["id"],
+    result = []
+    for item in data:
+        commit_url = None
+        for artifact in item["release"]["artifacts"]:
+            def_ref = artifact["definitionReference"]
+            repo = def_ref["repository"]
+            provider = def_ref["repository.provider"]
+            provider_id = provider["id"] if isinstance(provider, dict) else ""
+            if provider_id.lower() == "github":
+                repo_name = repo["name"]
+                source_version = def_ref["sourceVersion"]["id"]
+                if repo_name and source_version:
+                    commit_url = f"https://github.com/{repo_name}/commit/{source_version}"
+                    break
+
+        result.append({
+            "releaseId": item["release"]["id"],
             "pipelineName": item["releaseDefinition"]["name"],
-            "releaseName": item["name"],
-            "path": item["releaseDefinition"]["path"],
-            "status": item["status"],
-            "createdOn": item["createdOn"],
-            "description": item.get("description", "—"),
+            "releaseName": item["release"]["name"],
+            "environment": item["releaseEnvironment"]["name"],
+            "status": item["deploymentStatus"],
+            "queuedOn": item["queuedOn"],
+            # "runDuration": (
+            #     (lambda s, c:
+            #         f"{int((parse_datetime(c) - parse_datetime(s)).total_seconds() // 60)} min "
+            #         f"{int((parse_datetime(c) - parse_datetime(s)).total_seconds() % 60)} sec"
+            #     )
+            #     (item.get("startedOn"), item.get("completedOn"))
+            #     if item.get("startedOn") and item.get("completedOn") else None
+            # ),
             "pipelineUrl": f"https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId={item['releaseDefinition']['id']}",
-            "releaseUrl": f"https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId={item['id']}"
-        }
-        for item in data
-    ]
+            "releaseUrl": f"https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId={item['release']['id']}",
+            "commitUrl": commit_url
+        })
     return JSONResponse(content=result)
 
 
@@ -479,10 +500,12 @@ async def get_release_work_items(
                     "example": [
                         {
                             "environmentName": "Dev",
+                            "releaseId": 45268,
                             "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12345"
                         },
                         {
                             "environmentName": "QA",
+                            "releaseId": 45262,
                             "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12346"
                         }
                     ]
@@ -638,31 +661,31 @@ async def get_release_plan_work_items(
     return JSONResponse(content=results)
 
 
-@router.get(
-    "/api/github-commit-url",
-    description="Fetches the GitHub commit URL for a release if the repository provider is GitHub",
-    response_description="GitHub commit URL for the release",
-    responses={
-        200: {
-            "description": "GitHub commit URL for the release",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "commitUrl": "https://github.com/PSJH/AT_MCE_CHMP/commit/debfd1e9b43735a5696cb5c478fddfcb802d0310"
-                    }
-                }
-            }
-        }
-    }
-)
-async def get_github_commit_url(
-    release_id: int = Query(..., description="Release ID"),
-    project: str = Query(..., description="Project name, e.g., 'CHMP'")
-):
-    commit_url, error = fetch_github_commit_url_from_release(release_id, project)
-    if error:
-        raise HTTPException(status_code=404, detail=error)
-    return JSONResponse(content={"commitUrl": commit_url})
+# @router.get(
+#     "/api/github-commit-url",
+#     description="Fetches the GitHub commit URL for a release if the repository provider is GitHub",
+#     response_description="GitHub commit URL for the release",
+#     responses={
+#         200: {
+#             "description": "GitHub commit URL for the release",
+#             "content": {
+#                 "application/json": {
+#                     "example": {
+#                         "commitUrl": "https://github.com/PSJH/AT_MCE_CHMP/commit/debfd1e9b43735a5696cb5c478fddfcb802d0310"
+#                     }
+#                 }
+#             }
+#         }
+#     }
+# )
+# async def get_github_commit_url(
+#     release_id: int = Query(..., description="Release ID"),
+#     project: str = Query(..., description="Project name, e.g., 'CHMP'")
+# ):
+#     commit_url, error = fetch_github_commit_url_from_release(release_id, project)
+#     if error:
+#         raise HTTPException(status_code=404, detail=error)
+#     return JSONResponse(content={"commitUrl": commit_url})
 
 # def parse_html_for_release_notes(item_data):
 #     release_notes_html = item_data['fields'].get('Custom.ReleaseNotes', '')
