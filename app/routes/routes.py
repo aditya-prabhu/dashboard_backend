@@ -203,23 +203,14 @@ async def get_pipeline_data(
                     "example": [
                         {
                             "releaseId": 12345,
-                            "name": "CHMP - UI Release",
-                            "path": "\\CHMP\\UI",
-                            "status": "active",
-                            "createdOn": "2024-06-01T12:00:00Z",
-                            "description": "Release for UI changes",
+                            "pipelineName": "CHMP - UI Release",
+                            "releaseName": "Release-15",
+                            "environment": "Dev",
+                            "status": "succeeded",
+                            "queuedOn": "2024-06-01T12:00:00Z",
                             "pipelineUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId=679",
-                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12345"
-                        },
-                        {
-                            "releaseId": 12346,
-                            "name": "CHMP - API Release",
-                            "path": "\\CHMP\\API",
-                            "status": "completed",
-                            "createdOn": "2024-05-15T09:30:00Z",
-                            "description": "Release for API updates",
-                            "pipelineUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId=679",
-                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12346"
+                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12345",
+                            "commitUrl": "https://github.com/PSJH/AT_MCE_CHMP/commit/debfd1e9b43735a5696cb5c478fddfcb834d0310"
                         }
                     ]
                 }
@@ -497,18 +488,16 @@ async def get_release_work_items(
             "description": "List of environments with release progress URLs",
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "environmentName": "Dev",
-                            "releaseId": 45268,
-                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12345"
-                        },
-                        {
-                            "environmentName": "QA",
-                            "releaseId": 45262,
-                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12346"
-                        }
-                    ]
+                    "example": {
+                        "environments": [
+                            {
+                                "environmentName": "Dev",
+                                "releaseId": 45268,
+                                "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12345"
+                            }
+                        ],
+                        "pipelineUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_release?_a=releases&view=mine&definitionId=285"
+                    }
                 }
             }
         }

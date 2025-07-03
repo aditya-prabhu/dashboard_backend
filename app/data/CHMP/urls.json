@@ -10,5 +10,6 @@
     "work-items": " https://dev.azure.com/PSJH/Administrative%20Technology/_apis/wit/workitems?{workItemIds}&api-version=7.2-preview.3",
     "wiki-pages": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/wiki/wikis/Administrative-Technologies.wiki/pages?path=Applications/HR and Onboarding/Caregiver Health Services/Release Notes&recursionLevel=OneLevel&api-version=7.1",
     "wiql-url": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/wit/wiql?api-version=7.1-preview.2",
-    "tags": [ "CHMP", "Release Plan"]
+    "tags": [ "CHMP", "Release Plan"],
+    "definition-ids": [281, 279, 291]
 }

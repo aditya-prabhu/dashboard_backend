@@ -131,6 +131,8 @@ def fetch_wiki_pages(project):
 def fetch_pipeline_releases(start, end, project):
     """
     Fetch pipeline releases for a project within a date range.
+    If 'definition-ids' is present in urls.json, fetch releases for each definitionId and append all results.
+    Also fetch releases by path as before, and combine both sets (removing duplicates).
 
     Args:
         start (str): Start date (ISO format).
@@ -143,6 +145,30 @@ def fetch_pipeline_releases(start, end, project):
     project_info = get_project_info(project)
     if not project_info:
         return None, {"error": f"Project '{project}' not found in projects.json"}
+
+    api_urls, error = load_api_urls(project)
+    if error:
+        return None, error
+
+    url = api_urls["all-releases"].format(**project_info)
+    all_releases = []
+
+    # 1. Fetch by definition-ids if present
+    definition_ids = api_urls.get("definition-ids")
+    if definition_ids and isinstance(definition_ids, list) and len(definition_ids) > 0:
+        for definition_id in definition_ids:
+            params = {
+                "definitionId": definition_id,
+                "minCreatedTime": start,
+                "maxCreatedTime": end,
+                "$top": 200,
+                "api-version": "7.1"
+            }
+            resp = requests.get(url, params=params, auth=AUTH, headers=HEADERS)
+            if resp.status_code == 200:
+                all_releases.extend(resp.json().get("value", []))
+
+    # 2. Fetch by path (original behavior)
     params = {
         "minCreatedTime": start,
         "maxCreatedTime": end,
@@ -150,14 +176,11 @@ def fetch_pipeline_releases(start, end, project):
         "path": f"\\{project_info['path']}",
         "api-version": "7.1"
     }
-    api_urls, error = load_api_urls(project)
-    if error:
-        return None, error
-    url = api_urls["all-releases"].format(**project_info)
     resp = requests.get(url, params=params, auth=AUTH, headers=HEADERS)
-    if resp.status_code != 200:
-        return None, {"error": "Failed to fetch release data"}
-    return resp.json().get("value", []), None
+    if resp.status_code == 200:
+        all_releases.extend(resp.json().get("value", []))
+
+    return all_releases, None
 
 def fetch_pipeline_releases_by_definition(start, end, project, definition_id):
     """
