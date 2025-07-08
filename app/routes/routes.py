@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List
@@ -98,6 +98,7 @@ async def get_iterations(
         }
         for it in filtered_iterations[-10:]
     ]
+    release_data = list(reversed(release_data))
 
     wiki_result, error = fetch_wiki_pages(project)
     wiki_pages = []
@@ -360,7 +361,9 @@ async def get_iteration_work_items(
         }
     }
 )
-async def create_project(req: ProjectCreateRequest):
+async def create_project(
+    req: ProjectCreateRequest
+    ):
     project_name = req.project_name.strip()
     release_links = req.releases
     tags = getattr(req, "tags", [])
@@ -417,10 +420,13 @@ async def create_project(req: ProjectCreateRequest):
         }
     }
 )
-async def get_project_info(project_name: str = Query(..., description="Project name, e.g., 'CHMP'")):
+async def get_project_info(
+    project_name: str = Query(..., description="Project name, e.g., 'CHMP'")
+):
     base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
     urls_path = os.path.join(base_dir, project_name, 'urls.json')
-    projects_json_path = os.path.join(base_dir, 'projects.json')
+    projects_json_path = os.path.join(base_dir, 'projects.json'),
+    
 
     try:
         with open(urls_path, 'r') as f:
@@ -652,7 +658,7 @@ async def get_release_plan_work_items(
         data, error = fetch_azure_url(url)
         if error:
             raise HTTPException(status_code=500, detail=error)
-        title = data.get("fields", {}).get("System.Title")
+        title = data.get("fields", {}).get("System.IterationPath")
         web_url = data.get("_links", {}).get("html", {}).get("href")
         if title and web_url:
             results.append({
@@ -661,7 +667,49 @@ async def get_release_plan_work_items(
             })
     return JSONResponse(content=results)
 
+@router.get(
+    "/api/test-plan-result",
+    description="Returns the sum of all test-related fields for a given project and sprint",
+    response_description="Aggregated test run summary for the test plan",
+    responses={
+        200: {
+            "description": "Aggregated test run summary",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "totalTests": 10,
+                        "incompleteTests": 2,
+                        "notApplicableTests": 1,
+                        "passedTests": 7,
+                        "failedTests": 0,
+                        "url": "https://dev.azure.com/PSJH/Administrative%20Technology/_testPlans/execute?planId=123456"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_test_plan_result(
+    project: str = Query(..., description="Project name, e.g., 'CHMP'"),
+    sprint: str = Query(..., description="Sprint/iteration name, e.g., 'Sprint 13'")
+):
+    from app.utils.fetch_data import fetch_test_plan_runs
 
+    runs_json, error = fetch_test_plan_runs(project, sprint)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+
+    summary_fields = ["totalTests", "incompleteTests", "notApplicableTests", "passedTests", "unanalyzedTests"]
+    summary = {field: 0 for field in summary_fields}
+
+    for run in runs_json.get("value", []):
+        for field in summary_fields:
+            summary[field] += run.get(field, 0)
+
+    if "url" in runs_json:
+        summary["url"] = runs_json["url"]
+
+    return JSONResponse(content=summary)
 # @router.get(
 #     "/api/github-commit-url",
 #     description="Fetches the GitHub commit URL for a release if the repository provider is GitHub",

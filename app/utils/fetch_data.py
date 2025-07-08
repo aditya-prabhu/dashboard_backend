@@ -454,6 +454,67 @@ def fetch_azure_url(url):
         return None, {"error": f"Failed to fetch data from {url}: {resp.text}"}
     return resp.json(), None
 
+def fetch_test_plan_runs(project_name, sprint_name):
+    """
+    Fetch the test plan runs for a given project and sprint (iteration) name.
+    Iterates through paginated results using x-ms-continuationtoken until the plan is found or all pages are exhausted.
+    Once found, calls the test runs API with the planId.
+
+    Args:
+        project_name (str): The name of the project.
+        sprint_name (str): The sprint/iteration name to match (should match the end of the 'iteration' field).
+
+    Returns:
+        tuple: (test runs JSON with executeUrl, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    list_testplans_url = api_urls.get("list-testplans")
+    test_runs_url_template = api_urls.get("testplan-url")
+    if not list_testplans_url or not test_runs_url_template:
+        return None, {"error": "Required test plan URLs not found in urls.json"}
+
+    continuation_token = "0"
+    headers = {
+        "Accept": "application/json"
+    }
+
+    plan_id = None
+    while True:
+        url = re.sub(r"continuationToken=[^&]*", f"continuationToken={continuation_token}", list_testplans_url)
+        resp = requests.get(url, auth=AUTH, headers=headers)
+        if resp.status_code != 200:
+            return None, {"error": f"Failed to fetch test plans: {resp.text}"}
+
+        data = resp.json()
+        plans = data.get("value", [])
+        for plan in plans:
+            iteration_path = plan.get("iteration", "")
+            if iteration_path and iteration_path.split("\\")[-1].strip() == sprint_name.strip():
+                plan_id = plan.get("id")
+                break
+        if plan_id is not None:
+            break
+
+        continuation_token = resp.headers.get("x-ms-continuationtoken")
+        if not continuation_token:
+            break
+
+    if not plan_id:
+        return None, {"error": f"No test plan found for sprint '{sprint_name}' in project '{project_name}'"}
+
+    test_runs_url = test_runs_url_template.replace("{planId}", str(plan_id))
+    resp = requests.get(test_runs_url, auth=AUTH, headers=headers)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch test runs for planId {plan_id}: {resp.text}"}
+
+    result_json = resp.json()
+    result_json["url"] = f"https://dev.azure.com/PSJH/Administrative%20Technology/_testPlans/execute?planId={plan_id}"
+
+    return result_json, None
+
 # def fetch_github_commit_url_from_release(release_id, project_name):
 #     """
 #     Given a releaseId and projectName, fetch the GitHub commit URL if the release's repository provider is GitHub.
