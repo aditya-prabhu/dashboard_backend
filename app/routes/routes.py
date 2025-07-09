@@ -710,6 +710,7 @@ async def get_test_plan_result(
         summary["url"] = runs_json["url"]
 
     return JSONResponse(content=summary)
+    
 # @router.get(
 #     "/api/github-commit-url",
 #     description="Fetches the GitHub commit URL for a release if the repository provider is GitHub",
