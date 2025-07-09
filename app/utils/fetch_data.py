@@ -515,6 +515,32 @@ def fetch_test_plan_runs(project_name, sprint_name):
 
     return result_json, None
 
+def fetch_test_run_results(project_name, run_id):
+    """
+    Fetch test results for a given test run in a project.
+
+    Args:
+        project_name (str): The name of the project.
+        run_id (str or int): The test run ID.
+
+    Returns:
+        tuple: (test results JSON, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    test_run_results_url_template = api_urls.get("testrun-result")
+    if not test_run_results_url_template:
+        return None, {"error": "testrun-result URL not found in urls.json"}
+
+    url = test_run_results_url_template.replace("{runId}", str(run_id))
+    resp = requests.get(url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch test run results for runId {run_id}: {resp.text}"}
+
+    return resp.json(), None
+
 # def fetch_github_commit_url_from_release(release_id, project_name):
 #     """
 #     Given a releaseId and projectName, fetch the GitHub commit URL if the release's repository provider is GitHub.

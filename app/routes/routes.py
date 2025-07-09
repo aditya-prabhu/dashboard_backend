@@ -14,7 +14,8 @@ from app.utils.fetch_data import (
     fetch_project_names, fetch_pipeline_releases_by_definition,
     fetch_wiki_pages, fetch_release_work_items,
     fetch_release_definition, fetch_pending_approvals_from_pipelines,
-    fetch_release_plan, fetch_azure_url #, fetch_github_commit_url_from_release
+    fetch_release_plan, fetch_azure_url, fetch_test_plan_runs,
+    fetch_test_run_results
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -669,7 +670,7 @@ async def get_release_plan_work_items(
 
 @router.get(
     "/api/test-plan-result",
-    description="Returns the sum of all test-related fields for a given project and sprint",
+    description="Returns the sum of all test-related fields for a given project and sprint, with detailed outcome breakdown for unanalyzed tests",
     response_description="Aggregated test run summary for the test plan",
     responses={
         200: {
@@ -682,6 +683,7 @@ async def get_release_plan_work_items(
                         "notApplicableTests": 1,
                         "passedTests": 7,
                         "failedTests": 0,
+                        "blockedTests": 1,
                         "url": "https://dev.azure.com/PSJH/Administrative%20Technology/_testPlans/execute?planId=123456"
                     }
                 }
@@ -693,7 +695,7 @@ async def get_test_plan_result(
     project: str = Query(..., description="Project name, e.g., 'CHMP'"),
     sprint: str = Query(..., description="Sprint/iteration name, e.g., 'Sprint 13'")
 ):
-    from app.utils.fetch_data import fetch_test_plan_runs
+    from app.utils.fetch_data import fetch_test_plan_runs, fetch_test_run_results
 
     runs_json, error = fetch_test_plan_runs(project, sprint)
     if error:
@@ -701,10 +703,34 @@ async def get_test_plan_result(
 
     summary_fields = ["totalTests", "incompleteTests", "notApplicableTests", "passedTests", "unanalyzedTests"]
     summary = {field: 0 for field in summary_fields}
+    run_ids_with_unanalyzed = []
 
     for run in runs_json.get("value", []):
         for field in summary_fields:
             summary[field] += run.get(field, 0)
+        if run.get("unanalyzedTests", 0) > 0:
+            run_ids_with_unanalyzed.append(run.get("id"))
+    
+
+    outcome_counts = {}
+    if summary["unanalyzedTests"] > 0 and run_ids_with_unanalyzed:
+        from collections import Counter
+        for run_id in run_ids_with_unanalyzed:
+            test_results_json, err = fetch_test_run_results(project, run_id)
+            if err or not test_results_json or "value" not in test_results_json:
+                continue
+            outcomes = [tr.get("outcome") for tr in test_results_json["value"] if tr.get("outcome")]
+            for outcome, count in Counter(outcomes).items():
+                if outcome in outcome_counts:
+                    outcome_counts[outcome] += count
+                else:
+                    outcome_counts[outcome] = count
+
+        summary.pop("unanalyzedTests", None)
+        for outcome, count in outcome_counts.items():
+            summary[outcome] = count
+    else:
+        summary["failedTests"] = summary.pop("unanalyzedTests", 0)
 
     if "url" in runs_json:
         summary["url"] = runs_json["url"]
