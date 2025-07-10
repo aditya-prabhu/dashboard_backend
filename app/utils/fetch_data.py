@@ -541,6 +541,32 @@ def fetch_test_run_results(project_name, run_id):
 
     return resp.json(), None
 
+def fetch_pending_approvals_for_user(project_name, username):
+    """
+    Fetch pending approvals assigned to a specific user for a given project.
+
+    Args:
+        project_name (str): The name of the project.
+        username (str): The user's email or UPN to filter approvals.
+
+    Returns:
+        tuple: (response JSON dict, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    approvals_url_template = api_urls.get("user-pending-approvals")
+    if not approvals_url_template:
+        return None, {"error": "pending-approvals-user URL not found in urls.json"}
+
+    url = approvals_url_template.replace("{userName}", username)
+    resp = requests.get(url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch pending approvals for user {username}: {resp.text}"}
+
+    return resp.json(), None
+
 # def fetch_github_commit_url_from_release(release_id, project_name):
 #     """
 #     Given a releaseId and projectName, fetch the GitHub commit URL if the release's repository provider is GitHub.

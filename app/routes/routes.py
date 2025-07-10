@@ -458,6 +458,8 @@ async def get_project_info(
         "urls": urls_data,
         "project": project_meta
     })
+
+
 @router.get(
     "/api/release-work-items",
     description="Fetches work item details attached to a release",
@@ -736,7 +738,57 @@ async def get_test_plan_result(
         summary["url"] = runs_json["url"]
 
     return JSONResponse(content=summary)
-    
+
+
+@router.get(
+    "/api/pending-approvals-user",
+    description="Fetches pending approvals assigned to a specific user for a project",
+    response_description="List of pending approvals for the user with environment, pipeline, and release info",
+    responses={
+        200: {
+            "description": "List of pending approvals for the user",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "environmentName": "Dev",
+                            "pipelineName": "AT_MAP_BusinessProcess_SVC_CD",
+                            "releaseName": "Release-15",
+                            "releaseUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId=12345"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
+async def get_pending_approvals_for_user(
+    project: str = Query(..., description="Project name, e.g., 'CHMP'"),
+    username: str = Query(..., description="User's email or UPN")
+):
+    from app.utils.fetch_data import fetch_pending_approvals_for_user
+
+    approvals_json, error = fetch_pending_approvals_for_user(project, username)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+
+    results = []
+    for item in approvals_json.get("value", []):
+        env_name = item.get("releaseEnvironment", {}).get("name")
+        pipeline_name = item.get("releaseDefinition", {}).get("name")
+        release_name = item.get("release", {}).get("name")
+        release_id = item.get("release", {}).get("id")
+        release_url = None
+        if release_id:
+            release_url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_releaseProgress?_a=release-pipeline-progress&releaseId={release_id}"
+        results.append({
+            "pipelineName": pipeline_name,
+            "releaseName": release_name,
+            "environmentName": env_name,
+            "approvalUrl": release_url
+        })
+
+    return JSONResponse(content=results)
 # @router.get(
 #     "/api/github-commit-url",
 #     description="Fetches the GitHub commit URL for a release if the repository provider is GitHub",
