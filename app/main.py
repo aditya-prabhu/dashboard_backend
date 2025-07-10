@@ -7,7 +7,7 @@ from app.routes.routes import router
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://brave-tree-041b43b1e.2.azurestaticapps.net/"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
