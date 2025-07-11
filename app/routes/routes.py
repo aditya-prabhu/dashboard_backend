@@ -686,7 +686,8 @@ async def get_release_plan_work_items(
                         "passedTests": 7,
                         "failedTests": 0,
                         "blockedTests": 1,
-                        "url": "https://dev.azure.com/PSJH/Administrative%20Technology/_testPlans/execute?planId=123456"
+                        "url": "https://dev.azure.com/PSJH/Administrative%20Technology/_testPlans/execute?planId=123456",
+                        "success": True
                     }
                 }
             }
@@ -712,7 +713,6 @@ async def get_test_plan_result(
             summary[field] += run.get(field, 0)
         if run.get("unanalyzedTests", 0) > 0:
             run_ids_with_unanalyzed.append(run.get("id"))
-    
 
     outcome_counts = {}
     if summary["unanalyzedTests"] > 0 and run_ids_with_unanalyzed:
@@ -736,6 +736,12 @@ async def get_test_plan_result(
 
     if "url" in runs_json:
         summary["url"] = runs_json["url"]
+
+    # Add success flag
+    passed = summary.get("passedTests", 0)
+    not_applicable = summary.get("notApplicableTests", 0)
+    total = summary.get("totalTests", 0)
+    summary["success"] = (passed + not_applicable) == total
 
     return JSONResponse(content=summary)
 
