@@ -2,16 +2,13 @@
     {
         "projectName": "CHMP",
         "path": "CHMP",
-        "teamName": "CHS Hub - Raptor"
+        "teamName": "CHS Hub - Raptor",
+        "yaml-pipelines-path": "CHMP"
     },
     {
         "projectName": "OnboardMe",
         "path": "OnboardMe-CD",
-        "teamName": "OnboardMe"
-    },
-    {
-        "projectName": "test",
-        "path": "test team path",
-        "teamName": "test team"
+        "teamName": "OnboardMe",
+        "yaml-pipelines-path": "OnboardMe-CI"
     }
 ]

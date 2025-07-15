@@ -3,7 +3,7 @@ import os
 import json
 from dotenv import load_dotenv
 import re
-import base64
+import httpx
 
 load_dotenv()
 
@@ -567,61 +567,111 @@ def fetch_pending_approvals_for_user(project_name, username):
 
     return resp.json(), None
 
-# def fetch_github_commit_url_from_release(release_id, project_name):
-#     """
-#     Given a releaseId and projectName, fetch the GitHub commit URL if the release's repository provider is GitHub.
+def fetch_pipelines_by_folder_path(project_name):
+    """
+    Fetch pipelines for a project and filter by the pipeline-path in project_info.
 
-#     Args:
-#         release_id (str or int): The release ID.
-#         project_name (str): The project name.
+    Args:
+        project_name (str): The name of the project.
 
-#     Returns:
-#         tuple: (commit_url or None, error dict or None)
-#     """
-#     api_urls, error = load_api_urls(project_name)
-#     if error:
-#         return None, error
+    Returns:
+        tuple: (filtered pipelines list, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
 
-#     headers = {
-#         "Accept": "application/json"
-#     }
+    project_info = get_project_info(project_name)
+    if not project_info:
+        return None, {"error": f"Project '{project_name}' not found in projects.json"}
 
-#     # 1. Call single-release API
-#     single_release_url = api_urls["single-release"].replace("{releaseId}", str(release_id))
-#     resp = requests.get(single_release_url, auth=AUTH, headers=headers)
-#     if resp.status_code != 200:
-#         return None, {"error": f"Failed to fetch release {release_id}"}
-#     release_json = resp.json()
+    pipelines_url = api_urls.get("yaml-pipelines-list")
+    pipeline_path = project_info.get("yaml-pipelines-path").lower()
+    if not pipelines_url or not pipeline_path:
+        return None, {"error": "pipelines-list or pipeline-path not found in urls.json or projects.json"}
 
-#     # 2. Check if repository.provider.id is GitHub and extract repo name and commit id
-#     for artifact in release_json.get("artifacts", []):
-#         def_ref = artifact.get("definitionReference", {})   
-#         repo_provider_obj = def_ref.get("repository.provider", {})
-#         repo_provider_id = repo_provider_obj.get("id", "") if isinstance(repo_provider_obj, dict) else ""
-#         print(repo_provider_id)
-#         if repo_provider_id.lower() == "github":
-#             repo_name = def_ref.get("repository", {}).get("name")
-#             print(repo_name)
-#             source_version = def_ref.get("sourceVersion").get("id")
-#             print(source_version)
-#             if repo_name and source_version:
-#                 commit_url = f"https://github.com/{repo_name}/commit/{source_version}"
-#                 return commit_url, None
-#     return None, {"error": "No GitHub repository artifact found in release or missing data"}
+    resp = requests.get(pipelines_url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch pipelines: {resp.text}"}
 
-# def fetch_wiql_url(project):
-#     api_urls, error = load_api_urls(project)
-#     if error:
-#         return None, error
-#     wiql_url = api_urls["wiql-url"]
-#     resp = requests.get(wiql_url, auth=AUTH, headers=HEADERS)
-#     if resp.status_code != 200:
-#         return None, {"error": "Failed to fetch WIQL work items"}
-#     work_items = resp.json().get("workItems", [])
-#     return work_items, None
+    pipelines = resp.json().get("value", [])
+    filtered = [
+        p for p in pipelines
+        if pipeline_path in (p.get("folder").lower() or "")
+    ]
+    return filtered, None
 
-# def fetch_release_plan_work_items(url):
-#     resp = requests.get(url, auth=AUTH, headers=HEADERS)
-#     if resp.status_code != 200:
-#         return None, {"error": f"Failed to fetch work item detail for {url}"}
-#     return resp.json(), None
+def fetch_builds_for_pipeline(project_name, pipeline_id, min_time, max_time):
+    """
+    Fetch builds for a given pipeline and time window using the builds URL from urls.json.
+
+    Args:
+        project_name (str): The name of the project.
+        pipeline_id (str or int): The pipeline definition ID.
+        min_time (str): The minimum time (ISO format).
+        max_time (str): The maximum time (ISO format).
+
+    Returns:
+        tuple: (response JSON dict, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    builds_url_template = api_urls.get("yaml-pipeline-builds")
+    if not builds_url_template:
+        return None, {"error": "builds-url not found in urls.json"}
+
+    url = (
+        builds_url_template
+        .replace("{pipelineId}", str(pipeline_id))
+        .replace("{minTime}", min_time)
+        .replace("{maxTime}", max_time)
+    )
+
+    resp = requests.get(url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch builds: {resp.text}"}
+
+    return resp.json(), None
+
+
+async def fetch_azure_url_async(url):
+    """
+    Async version: Fetches and returns the JSON response from a given Azure DevOps API URL.
+
+    Args:
+        url (str): The Azure DevOps API URL.
+
+    Returns:
+        tuple: (response JSON dict, error dict or None)
+    """
+    AZURE_PAT = os.environ.get("AZURE_PAT")
+    headers = {"Accept": "application/json"}
+    auth = httpx.BasicAuth("", AZURE_PAT)
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=headers, auth=auth)
+        if resp.status_code != 200:
+            return None, {"error": f"Failed to fetch data from {url}: {resp.text}"}
+        return resp.json(), None
+
+async def fetch_stages_from_timeline_url(timeline_url):
+    """
+    Fetches the timeline and returns a list of stages (name and result), sorted by their order.
+    """
+    data, error = await fetch_azure_url_async(timeline_url)
+    if error or not data:
+        return []
+    stages = [
+        {
+            "name": rec.get("name"),
+            "result": rec.get("result"),
+            "order": rec.get("order", 0)
+        }
+        for rec in data.get("records", [])
+        if rec.get("type", "").lower() == "stage"
+    ]
+    # Sort by the 'order' field
+    stages_sorted = sorted(stages, key=lambda x: x["order"])
+    # Remove 'order' from the returned dict if you don't want to expose it
+    return [{"name": s["name"], "result": s["result"]} for s in stages_sorted]

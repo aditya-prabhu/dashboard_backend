@@ -5,17 +5,19 @@ from typing import List
 import os
 import json
 import re
+import httpx
+import asyncio
 import urllib.parse
 from dateutil.parser import parse as parse_datetime
 from app.utils.fetch_data import (
     fetch_pipeline_releases, fetch_iterations,
-    # fetch_wiql_url, fetch_release_plan_work_items
     fetch_iteration_work_items, fetch_work_items,
     fetch_project_names, fetch_pipeline_releases_by_definition,
     fetch_wiki_pages, fetch_release_work_items,
     fetch_release_definition, fetch_pending_approvals_from_pipelines,
     fetch_release_plan, fetch_azure_url, fetch_test_plan_runs,
-    fetch_test_run_results
+    fetch_test_run_results, fetch_pipelines_by_folder_path,
+    fetch_builds_for_pipeline
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -228,7 +230,6 @@ async def get_pipeline_runs(
 ):
     if not startDate or not endDate:
         raise HTTPException(status_code=400, detail="Missing start or end date")
-    from app.utils.fetch_data import fetch_pipeline_releases_by_definition
     data, error = fetch_pipeline_releases_by_definition(startDate, endDate, project, definitionId)
     if error:
         raise HTTPException(status_code=500, detail=error)
@@ -318,13 +319,14 @@ async def get_iteration_work_items(
             unique_ids.add(str(rel["target"]["id"]))
 
     if not unique_ids:
-        return JSONResponse(content=[])
+        return JSONResponse(content={"results": [], "success": True})
 
     work_items, error = fetch_work_items(list(unique_ids), project)
     if error:
         raise HTTPException(status_code=500, detail=error)
 
     results = []
+    all_closed_or_resolved = True
     for data in work_items:
         fields = data.get("fields", {})
         assigned_to = fields.get("System.AssignedTo", {})
@@ -333,17 +335,22 @@ async def get_iteration_work_items(
         else:
             assigned_to_name = assigned_to
 
+        state = fields.get("System.State")
+        if state not in ("Closed", "Resolved"):
+            all_closed_or_resolved = False
+
         result = {
             "id": data.get("id"),
             "areaPath": fields.get("System.AreaPath"),
             "iterationPath": fields.get("System.IterationPath"),
             "assignedTo": assigned_to_name,
             "title": fields.get("System.Title"),
-            "state": fields.get("System.State"),
-            "htmlUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/{}".format(data.get("id"))
+            "state": state,
+            "htmlUrl": f"https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/{data.get('id')}"
         }
         results.append(result)
-    return JSONResponse(content=results)
+
+    return JSONResponse(content={"value": results, "success": all_closed_or_resolved})
 
 
 @router.post("/api/create-project",
@@ -426,8 +433,7 @@ async def get_project_info(
 ):
     base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
     urls_path = os.path.join(base_dir, project_name, 'urls.json')
-    projects_json_path = os.path.join(base_dir, 'projects.json'),
-    
+    projects_json_path = os.path.join(base_dir, 'projects.json')  # <-- FIXED
 
     try:
         with open(urls_path, 'r') as f:
@@ -453,12 +459,11 @@ async def get_project_info(
             for id in urls_data["definition-ids"]
         ]
     urls_data["releases"] = releases_links
-
+    print("urls_data:", urls_data)
     return JSONResponse(content={
         "urls": urls_data,
         "project": project_meta
     })
-
 
 @router.get(
     "/api/release-work-items",
@@ -698,7 +703,6 @@ async def get_test_plan_result(
     project: str = Query(..., description="Project name, e.g., 'CHMP'"),
     sprint: str = Query(..., description="Sprint/iteration name, e.g., 'Sprint 13'")
 ):
-    from app.utils.fetch_data import fetch_test_plan_runs, fetch_test_run_results
 
     runs_json, error = fetch_test_plan_runs(project, sprint)
     if error:
@@ -795,63 +799,117 @@ async def get_pending_approvals_for_user(
         })
 
     return JSONResponse(content=results)
-# @router.get(
-#     "/api/github-commit-url",
-#     description="Fetches the GitHub commit URL for a release if the repository provider is GitHub",
-#     response_description="GitHub commit URL for the release",
-#     responses={
-#         200: {
-#             "description": "GitHub commit URL for the release",
-#             "content": {
-#                 "application/json": {
-#                     "example": {
-#                         "commitUrl": "https://github.com/PSJH/AT_MCE_CHMP/commit/debfd1e9b43735a5696cb5c478fddfcb802d0310"
-#                     }
-#                 }
-#             }
-#         }
-#     }
-# )
-# async def get_github_commit_url(
-#     release_id: int = Query(..., description="Release ID"),
-#     project: str = Query(..., description="Project name, e.g., 'CHMP'")
-# ):
-#     commit_url, error = fetch_github_commit_url_from_release(release_id, project)
-#     if error:
-#         raise HTTPException(status_code=404, detail=error)
-#     return JSONResponse(content={"commitUrl": commit_url})
 
-# def parse_html_for_release_notes(item_data):
-#     release_notes_html = item_data['fields'].get('Custom.ReleaseNotes', '')
-#     match = re.search(r'href="(.*?)"', release_notes_html)
-#     return match.group(1) if match else None
-# @router.get("/api/release-plan-work-items",
-#             description="Fetches data from the release plan work items",
-#             response_description="data from the release plan work items(only last 10 releases)"
-# )
-# async def get_release_plan_work_items(
-#     project: str = Query(..., description="Project name, e.g., 'CHMP'")
-# ):
-#     release_plan_work_items, error = fetch_wiql_url(project)
-#     if error:
-#         raise HTTPException(status_code=500, detail=error)
+@router.get(
+    "/api/yaml-pipelines",
+    description="Fetches pipelines filtered by folder path for a given project",
+    response_description="List of filtered pipelines with id, revision, name, folder, webUrl, and total count",
+    responses={
+        200: {
+            "description": "List of filtered pipelines",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "total": 1,
+                        "pipelines": [
+                            {
+                                "id": 4163,
+                                "revision": 4,
+                                "name": "at-hr-dochub-ui",
+                                "folder": "\\CHMP",
+                                "webUrl": "https://dev.azure.com/PSJH/1b24dd3b-420d-469b-a3d3-b3e04acc5cc0/_build/definition?definitionId=4163"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_yaml_pipelines(
+    project: str = Query(..., description="Project name, e.g., 'CHMP'")
+):
+    pipelines, error = fetch_pipelines_by_folder_path(project)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+    result = [
+        {
+            "id": p.get("id"),
+            "revision": p.get("revision"),
+            "name": p.get("name"),
+            "folder": p.get("folder"),
+            "webUrl": p.get("_links", {}).get("web", {}).get("href"),
+        }
+        for p in pipelines
+    ]
+    return JSONResponse(content={
+        "total": len(result),
+        "pipelines": result
+    })
 
-#     release_plan_work_items = release_plan_work_items[-10:]
-#     results = []
-#     for item in release_plan_work_items:
-#         item_data, detail_error = fetch_release_plan_work_items(item["url"])
-#         if detail_error:
-#             continue
-#         results.append({
-#             "id": item_data["id"],
-#             "title": item_data["fields"].get("System.Title"),
-#             "state": item_data["fields"].get("System.State"),
-#             "webUrl": item_data["_links"]["html"]["href"],
-#             "githubPRs": item_data["_links"]["workItemUpdates"]["href"],
-#             "release_notes_html": parse_html_for_release_notes(item_data),
-#             "PM Approval to Production": item_data['fields'].get('Custom.PMApprovaltoProduction'),
-#             "Dev Approval to Staging": item_data['fields'].get('Custom.DevApprovaltoStaging'),
-#             "SE Approval to Production": item_data['fields'].get('Custom.SEApprovaltoProduction'),
-#             "Approval to Staging": item_data['fields'].get('Custom.ApprovaltoStaging'),
-#         })
-#     return JSONResponse(content=results)
+from app.utils.fetch_data import fetch_builds_for_pipeline, fetch_stages_from_timeline_url
+
+@router.get(
+    "/api/yaml-pipeline-builds",
+    description="Fetches builds for a pipeline and time window, returns webUrl, buildId, result, githubUrl, and stages info",
+    response_description="List of builds with webUrl, buildId, result, githubUrl, and stages",
+    responses={
+        200: {
+            "description": "List of builds",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "webUrl": "https://dev.azure.com/PSJH/...",
+                            "buildId": 719414,
+                            "result": "succeeded",
+                            "githubUrl": "https://github.com/PSJH/at-hr-dochub-ui/commit/12db2ea5a403f0c770f872509f3b66b7b9c94a3d",
+                            "stages": [
+                                {"name": "Deploy to compliancedev", "result": "skipped"}
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
+async def get_yaml_pipeline_builds(
+    project: str = Query(..., description="Project name, e.g., 'CHMP'"),
+    pipelineId: int = Query(..., description="Pipeline definition ID"),
+    minTime: str = Query(..., description="Minimum time (ISO format)"),
+    maxTime: str = Query(..., description="Maximum time (ISO format)")
+):
+    builds_json, error = fetch_builds_for_pipeline(project, pipelineId, minTime, maxTime)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+    builds = builds_json.get("value", [])
+
+    tasks = []
+    build_results = []
+    for b in builds:
+        github_url = None
+        repo = b.get("repository", {})
+        if repo.get("type", "").lower() == "github":
+            repo_id = repo.get("id")
+            source_version = b.get("sourceVersion")
+            if repo_id and source_version:
+                github_url = f"https://github.com/{repo_id}/commit/{source_version}"
+        timeline_url = b.get("_links", {}).get("timeline", {}).get("href")
+        build_results.append({
+            "buildId": b.get("id"),
+            "name": b.get("definition", {}).get("name"),
+            "result": b.get("result"),
+            "webUrl": b.get("_links", {}).get("web", {}).get("href"),
+            "githubUrl": github_url,
+            "timeline_url": timeline_url
+        })
+        tasks.append(fetch_stages_from_timeline_url(timeline_url) if timeline_url else asyncio.sleep(0, result=[]))
+
+    stages_list = await asyncio.gather(*tasks)
+
+    for build, stages in zip(build_results, stages_list):
+        build["stages"] = stages
+        build.pop("timeline_url", None)
+
+    return JSONResponse(content=build_results)
