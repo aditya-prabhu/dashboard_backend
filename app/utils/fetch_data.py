@@ -603,16 +603,8 @@ def fetch_pipelines_by_folder_path(project_name):
 
 def fetch_builds_for_pipeline(project_name, pipeline_id, min_time, max_time):
     """
-    Fetch builds for a given pipeline and time window using the builds URL from urls.json.
-
-    Args:
-        project_name (str): The name of the project.
-        pipeline_id (str or int): The pipeline definition ID.
-        min_time (str): The minimum time (ISO format).
-        max_time (str): The maximum time (ISO format).
-
-    Returns:
-        tuple: (response JSON dict, error dict or None)
+    Fetch builds for a given pipeline and time window, and also fetch in-progress builds.
+    Returns merged results, removing duplicates.
     """
     api_urls, error = load_api_urls(project_name)
     if error:
@@ -622,18 +614,35 @@ def fetch_builds_for_pipeline(project_name, pipeline_id, min_time, max_time):
     if not builds_url_template:
         return None, {"error": "builds-url not found in urls.json"}
 
-    url = (
+    # 1. Request with minTime and maxTime
+    url_time = (
         builds_url_template
         .replace("{pipelineId}", str(pipeline_id))
-        .replace("{minTime}", min_time)
-        .replace("{maxTime}", max_time)
+        + f"&minTime={min_time}&maxTime={max_time}"
     )
+    resp_time = requests.get(url_time, auth=AUTH, headers=HEADERS)
+    if resp_time.status_code != 200:
+        return None, {"error": f"Failed to fetch builds (time filter): {resp_time.text}"}
+    builds_time = resp_time.json().get("value", [])
 
-    resp = requests.get(url, auth=AUTH, headers=HEADERS)
-    if resp.status_code != 200:
-        return None, {"error": f"Failed to fetch builds: {resp.text}"}
+    # 2. Request with statusFilter=inProgress
+    url_inprogress = (
+        builds_url_template
+        .replace("{pipelineId}", str(pipeline_id))
+        + "&statusFilter=inProgress"
+    )
+    resp_inprogress = requests.get(url_inprogress, auth=AUTH, headers=HEADERS)
+    if resp_inprogress.status_code != 200:
+        return None, {"error": f"Failed to fetch builds (inProgress): {resp_inprogress.text}"}
+    builds_inprogress = resp_inprogress.json().get("value", [])
 
-    return resp.json(), None
+    # 3. Merge results, removing duplicates by build id
+    builds_dict = {b["id"]: b for b in builds_time}
+    for b in builds_inprogress:
+        builds_dict[b["id"]] = b
+
+    merged_builds = list(builds_dict.values())
+    return {"value": merged_builds}, None
 
 
 async def fetch_azure_url_async(url):
@@ -666,6 +675,7 @@ async def fetch_stages_from_timeline_url(timeline_url):
         {
             "name": rec.get("name"),
             "result": rec.get("result"),
+            "state": rec.get("state"),
             "order": rec.get("order", 0)
         }
         for rec in data.get("records", [])
@@ -674,4 +684,43 @@ async def fetch_stages_from_timeline_url(timeline_url):
     # Sort by the 'order' field
     stages_sorted = sorted(stages, key=lambda x: x["order"])
     # Remove 'order' from the returned dict if you don't want to expose it
-    return [{"name": s["name"], "result": s["result"]} for s in stages_sorted]
+    return [{"name": s["name"], "result": s["result"], "state": s["state"]} for s in stages_sorted]
+
+def fetch_release_work_items_for_build(build_id, project_name):
+    """
+    Given a buildId and projectName, fetch work item details for that build.
+    Returns a list of dicts with title, state, reason, and assignedTo.
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    headers = {
+        "Accept": "application/json"
+    }
+
+    release_workitems_url = api_urls["release-workItems"].replace("{buildId}", str(build_id))
+    workitems_resp = requests.get(release_workitems_url, auth=AUTH, headers=headers)
+    if workitems_resp.status_code != 200:
+        return None, {"error": f"Failed to fetch work items for build {build_id}"}
+    workitems_json = workitems_resp.json()
+    results = []
+    for item in workitems_json.get("value", []):
+        wi_url = item["url"]
+        wi_resp = requests.get(wi_url, auth=AUTH, headers=headers)
+        if wi_resp.status_code != 200:
+            continue
+        wi_json = wi_resp.json()
+        fields = wi_json.get("fields", {})
+        results.append({
+            "title": fields.get("System.Title"),
+            "state": fields.get("System.State"),
+            "reason": fields.get("System.Reason"),
+            "assignedTo": (
+                fields.get("System.AssignedTo", {}).get("displayName")
+                if isinstance(fields.get("System.AssignedTo"), dict)
+                else fields.get("System.AssignedTo")
+            ),
+            "htmlUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/{}".format(item["id"])
+        })
+    return results, None

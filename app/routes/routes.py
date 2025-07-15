@@ -17,7 +17,7 @@ from app.utils.fetch_data import (
     fetch_release_definition, fetch_pending_approvals_from_pipelines,
     fetch_release_plan, fetch_azure_url, fetch_test_plan_runs,
     fetch_test_run_results, fetch_pipelines_by_folder_path,
-    fetch_builds_for_pipeline
+    fetch_builds_for_pipeline, fetch_release_work_items_for_build
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -459,7 +459,6 @@ async def get_project_info(
             for id in urls_data["definition-ids"]
         ]
     urls_data["releases"] = releases_links
-    print("urls_data:", urls_data)
     return JSONResponse(content={
         "urls": urls_data,
         "project": project_meta
@@ -899,7 +898,7 @@ async def get_yaml_pipeline_builds(
         build_results.append({
             "buildId": b.get("id"),
             "name": b.get("definition", {}).get("name"),
-            "result": b.get("result"),
+            "status": b.get("status"),
             "webUrl": b.get("_links", {}).get("web", {}).get("href"),
             "githubUrl": github_url,
             "timeline_url": timeline_url
@@ -913,3 +912,36 @@ async def get_yaml_pipeline_builds(
         build.pop("timeline_url", None)
 
     return JSONResponse(content=build_results)
+
+
+@router.get(
+    "/api/build-work-items",
+    description="Fetches work item details attached to a build",
+    response_description="List of work item details for the build",
+    responses={
+        200: {
+            "description": "List of work item details for the build",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "title": "Fix login bug",
+                            "state": "Closed",
+                            "reason": "Completed",
+                            "assignedTo": "Jane Doe",
+                            "htmlUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/238567"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
+async def get_build_work_items(
+    build_id: int = Query(..., description="Build ID"),
+    project: str = Query(..., description="Project name, e.g., 'CHMP'")
+):
+    work_items, error = fetch_release_work_items_for_build(build_id, project)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+    return JSONResponse(content=work_items)
