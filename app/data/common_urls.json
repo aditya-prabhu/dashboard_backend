@@ -1,3 +1,4 @@
 {
-        "yaml-pipeline-approvals": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/pipelines/approvals?$expand=steps&assignedTo={user}&state=pending&api-version=7.2-preview.2"
+        "yaml-pipeline-approvals": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/pipelines/approvals?$expand=steps&assignedTo={user}&state=pending&api-version=7.2-preview.2",
+        "user-pending-approvals": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/approvals?assignedToFilter={userName}&api-version=7.2-preview.3"
 }

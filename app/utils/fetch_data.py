@@ -542,24 +542,28 @@ def fetch_test_run_results(project_name, run_id):
 
     return resp.json(), None
 
-def fetch_pending_approvals_for_user(project_name, username):
+def fetch_pending_approvals_for_user(username):
     """
-    Fetch pending approvals assigned to a specific user for a given project.
+    Fetch pending approvals assigned to a specific user.
 
     Args:
-        project_name (str): The name of the project.
         username (str): The user's email or UPN to filter approvals.
 
     Returns:
         tuple: (response JSON dict, error dict or None)
     """
-    api_urls, error = load_api_urls(project_name)
-    if error:
-        return None, error
+    common_urls_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        'data', 'common_urls.json'
+    )
+    if not os.path.exists(common_urls_path):
+        return None, {"error": "common_urls.json not found"}
+    with open(common_urls_path, 'r') as f:
+        common_urls = json.load(f)
 
-    approvals_url_template = api_urls.get("user-pending-approvals")
+    approvals_url_template = common_urls.get("user-pending-approvals")
     if not approvals_url_template:
-        return None, {"error": "pending-approvals-user URL not found in urls.json"}
+        return None, {"error": "user-pending-approvals URL not found in common_urls.json"}
 
     url = approvals_url_template.replace("{userName}", username)
     resp = requests.get(url, auth=AUTH, headers=HEADERS)

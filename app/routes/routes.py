@@ -773,12 +773,11 @@ async def get_test_plan_result(
     }
 )
 async def get_pending_approvals_for_user(
-    project: str = Query(..., description="Project name, e.g., 'CHMP'"),
-    username: str = Query(..., description="User's email or UPN")
+    user_email: str = Query(..., description="User's email or UPN")
 ):
     from app.utils.fetch_data import fetch_pending_approvals_for_user
 
-    approvals_json, error = fetch_pending_approvals_for_user(project, username)
+    approvals_json, error = fetch_pending_approvals_for_user(user_email)
     if error:
         raise HTTPException(status_code=500, detail=error)
 

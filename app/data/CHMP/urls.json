@@ -13,7 +13,6 @@
     "list-testplans": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/testplan/plans?continuationToken=0&filterActivePlans=true&api-version=7.2-preview.1",
     "testplan-url": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/test/runs?planId={planId}&api-version=7.1",
     "testrun-result": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/test/Runs/{runId}/results?api-version=7.1",
-    "user-pending-approvals": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/approvals?assignedToFilter={userName}&api-version=7.2-preview.3",
     "yaml-pipelines-list": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/pipelines?api-version=7.2-preview.1",
     "yaml-pipeline-builds": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/build/builds?definitions={pipelineId}&api-version=7.1",
     "tags": [ "CHMP", "Release Plan"],
