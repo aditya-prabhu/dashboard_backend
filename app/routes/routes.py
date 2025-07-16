@@ -17,7 +17,8 @@ from app.utils.fetch_data import (
     fetch_release_definition, fetch_pending_approvals_from_pipelines,
     fetch_release_plan, fetch_azure_url, fetch_test_plan_runs,
     fetch_test_run_results, fetch_pipelines_by_folder_path,
-    fetch_builds_for_pipeline, fetch_release_work_items_for_build
+    fetch_builds_for_pipeline, fetch_release_work_items_for_build,
+    fetch_yaml_pipeline_approvals, fetch_pending_approval_descriptor_for_user
 )
 from app.utils.form_utils import (
     ProjectCreateRequest,
@@ -945,3 +946,73 @@ async def get_build_work_items(
     if error:
         raise HTTPException(status_code=500, detail=error)
     return JSONResponse(content=work_items)
+
+@router.get(
+    "/api/yaml-pipeline-approvals-matching",
+    description="Fetches YAML pipeline approvals and returns approvals where assignedApprover.uniqueName matches a group the user is in.",
+    response_description="List of matching approvals with pipeline info, summary URL, and pending environment."
+)
+async def get_yaml_pipeline_approvals_matching(
+    project: str = Query(..., description="Project name"),
+    user_email: str = Query(..., description="User email")
+):
+    # 1. Fetch approvals
+    approvals_json, error = fetch_yaml_pipeline_approvals(project, user_email)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+    approvals = approvals_json.get("value", [])
+
+    # 2. Fetch principalNames (groups) for user
+    principal_names, error = await fetch_pending_approval_descriptor_for_user(project, user_email)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+    principal_names.append(user_email)
+
+    # 3. Find approvals where any step's assignedApprover.uniqueName is in principal_names
+    results = []
+    for approval in approvals:
+        matching_steps = [
+            step for step in approval.get("steps", [])
+            if step.get("assignedApprover", {}).get("uniqueName") in principal_names
+        ]
+        if matching_steps:
+            pipeline = approval.get("pipeline", {})
+            pipeline_id = pipeline.get('id')
+            build_id = pipeline.get('owner',{}).get('id')
+            pipeline_name = pipeline.get("name")
+            pipeline_web_url = pipeline.get("owner", {}).get("_links", {}).get("web", {}).get("href")
+            pipeline_summary_url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_build?definitionId={pipeline_id}&_a=summary"
+            results.append({
+                "pipelineId": pipeline_id,
+                "buildId": build_id,
+                "pipelineName": pipeline_name,
+                "approvalUrl": pipeline_web_url,
+                "pipelineUrl": pipeline_summary_url
+            })
+
+    # 4. For each result, fetch timeline and find pending stage name
+    async def get_pending_stage_name(build_id):
+        import os
+        import httpx
+        AZURE_PAT = os.environ.get("AZURE_PAT")
+        url = f"https://dev.azure.com/PSJH/Administrative%20Technology/_apis/build/builds/{build_id}/timeline?api-version=7.1"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, auth=httpx.BasicAuth("", AZURE_PAT))
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            stages = [
+                rec for rec in data.get("records", [])
+                if rec.get("type", "").lower() == "stage" and rec.get("state", "").lower() == "pending"
+            ]
+            if not stages:
+                return None
+            pending_stage = min(stages, key=lambda x: x.get("order", 9999))
+            return pending_stage.get("name")
+
+    tasks = [get_pending_stage_name(item["buildId"]) for item in results]
+    pending_envs = await asyncio.gather(*tasks)
+    for item, env_name in zip(results, pending_envs):
+        item["pendingEnvironment"] = env_name
+
+    return JSONResponse(content=results)

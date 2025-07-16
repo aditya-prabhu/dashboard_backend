@@ -4,6 +4,7 @@ import json
 from dotenv import load_dotenv
 import re
 import httpx
+import asyncio
 
 load_dotenv()
 
@@ -681,9 +682,7 @@ async def fetch_stages_from_timeline_url(timeline_url):
         for rec in data.get("records", [])
         if rec.get("type", "").lower() == "stage"
     ]
-    # Sort by the 'order' field
     stages_sorted = sorted(stages, key=lambda x: x["order"])
-    # Remove 'order' from the returned dict if you don't want to expose it
     return [{"name": s["name"], "result": s["result"], "state": s["state"]} for s in stages_sorted]
 
 def fetch_release_work_items_for_build(build_id, project_name):
@@ -724,3 +723,107 @@ def fetch_release_work_items_for_build(build_id, project_name):
             "htmlUrl": "https://dev.azure.com/PSJH/Administrative%20Technology/_workitems/edit/{}".format(item["id"])
         })
     return results, None
+
+
+def fetch_yaml_pipeline_approvals(project_name, user_email):
+    """
+    Fetches the YAML pipeline approvals for a user and returns the raw response JSON.
+
+    Args:
+        project_name (str): The name of the project.
+        user_email (str): The user's email address.
+
+    Returns:
+        tuple: (response JSON dict, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    approvals_url_template = api_urls.get("yaml-pipeline-approvals")
+    if not approvals_url_template:
+        return None, {"error": "yaml-pipeline-approvals URL not found in urls.json"}
+
+    approvals_url = approvals_url_template.replace("{user}", user_email)
+    resp = requests.get(approvals_url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch approvals: {resp.text}"}
+    return resp.json(), None
+
+async def fetch_pending_approval_descriptor_for_user(project_name, user_email):
+    """
+    Fetches pending pipeline approvals for a user, returns the descriptor of the step where the user's email is present in assignedApprover.uniqueName,
+    then fetches the user's memberships from the Graph API, and finally fetches all group principalNames concurrently.
+
+    Args:
+        project_name (str): The name of the project.
+        user_email (str): The user's email address.
+
+    Returns:
+        tuple: (list of group principalNames if found, error dict or None)
+    """
+    api_urls, error = load_api_urls(project_name)
+    if error:
+        return None, error
+
+    approvals_url_template = api_urls.get("yaml-pipeline-approvals")
+    if not approvals_url_template:
+        return None, {"error": "pipeline-approvals URL not found in urls.json"}
+
+    approvals_url = approvals_url_template.replace("{user}", user_email)
+
+    # Step 1: Get the descriptor from pending approvals
+    resp = requests.get(approvals_url, auth=AUTH, headers=HEADERS)
+    if resp.status_code != 200:
+        return None, {"error": f"Failed to fetch approvals: {resp.text}"}
+
+    data = resp.json()
+    descriptor = None
+    for approval in data.get("value", []):
+        for step in approval.get("steps", []):
+            approver = step.get("assignedApprover", {})
+            unique_name = approver.get("uniqueName", "")
+            if user_email.lower() in unique_name.lower():
+                descriptor = approver.get("descriptor")
+                break
+        if descriptor:
+            break
+
+    if not descriptor:
+        return None, {"error": f"No pending approval found for user {user_email}"}
+
+    # Step 2: Fetch user details from Graph API
+    user_url = f"https://vssps.dev.azure.com/PSJH/_apis/graph/users/{descriptor}?api-version=7.2-preview.1"
+    user_resp = requests.get(user_url, auth=AUTH, headers=HEADERS)
+    if user_resp.status_code != 200:
+        return None, {"error": f"Failed to fetch user details: {user_resp.text}"}
+    user_json = user_resp.json()
+
+    # Step 3: Extract memberships URL
+    memberships_url = user_json.get("_links", {}).get("memberships", {}).get("href")
+    if not memberships_url:
+        return None, {"error": "Memberships URL not found in user details"}
+
+    # Step 4: Call memberships URL
+    memberships_resp = requests.get(memberships_url, auth=AUTH, headers=HEADERS)
+    if memberships_resp.status_code != 200:
+        return None, {"error": f"Failed to fetch memberships: {memberships_resp.text}"}
+    memberships_json = memberships_resp.json()
+
+    # Step 5: Collect all group (container) URLs from memberships
+    group_urls = [
+        item.get("_links", {}).get("container", {}).get("href")
+        for item in memberships_json.get("value", [])
+        if item.get("_links", {}).get("container", {}).get("href")
+    ]
+
+    # Step 6: Fetch all group details concurrently using httpx and return only principalName
+    if group_urls:
+        group_results = await asyncio.gather(*(fetch_azure_url_async(url) for url in group_urls))
+        group_details = [data for data, error in group_results if data and not error]
+    else:
+        group_details = []
+
+    principal_names = [g.get("principalName") for g in group_details if "principalName" in g]
+
+    return principal_names, None
