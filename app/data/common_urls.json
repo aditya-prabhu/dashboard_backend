@@ -1,0 +1,3 @@
+{
+        "yaml-pipeline-approvals": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/pipelines/approvals?$expand=steps&assignedTo={user}&state=pending&api-version=7.2-preview.2"
+}

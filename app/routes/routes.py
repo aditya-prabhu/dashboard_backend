@@ -953,17 +953,16 @@ async def get_build_work_items(
     response_description="List of matching approvals with pipeline info, summary URL, and pending environment."
 )
 async def get_yaml_pipeline_approvals_matching(
-    project: str = Query(..., description="Project name"),
     user_email: str = Query(..., description="User email")
 ):
     # 1. Fetch approvals
-    approvals_json, error = fetch_yaml_pipeline_approvals(project, user_email)
+    approvals_json, error = fetch_yaml_pipeline_approvals(user_email)
     if error:
         raise HTTPException(status_code=500, detail=error)
     approvals = approvals_json.get("value", [])
 
     # 2. Fetch principalNames (groups) for user
-    principal_names, error = await fetch_pending_approval_descriptor_for_user(project, user_email)
+    principal_names, error = await fetch_pending_approval_descriptor_for_user(user_email)
     if error:
         raise HTTPException(status_code=500, detail=error)
     principal_names.append(user_email)

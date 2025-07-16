@@ -725,24 +725,29 @@ def fetch_release_work_items_for_build(build_id, project_name):
     return results, None
 
 
-def fetch_yaml_pipeline_approvals(project_name, user_email):
+def fetch_yaml_pipeline_approvals(user_email):
     """
     Fetches the YAML pipeline approvals for a user and returns the raw response JSON.
 
     Args:
-        project_name (str): The name of the project.
         user_email (str): The user's email address.
 
     Returns:
         tuple: (response JSON dict, error dict or None)
     """
-    api_urls, error = load_api_urls(project_name)
-    if error:
-        return None, error
+    # Load common URLs from /data/common_urls.json
+    common_urls_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        'data', 'common_urls.json'
+    )
+    if not os.path.exists(common_urls_path):
+        return None, {"error": "common_urls.json not found"}
+    with open(common_urls_path, 'r') as f:
+        common_urls = json.load(f)
 
-    approvals_url_template = api_urls.get("yaml-pipeline-approvals")
+    approvals_url_template = common_urls.get("yaml-pipeline-approvals")
     if not approvals_url_template:
-        return None, {"error": "yaml-pipeline-approvals URL not found in urls.json"}
+        return None, {"error": "yaml-pipeline-approvals URL not found in common_urls.json"}
 
     approvals_url = approvals_url_template.replace("{user}", user_email)
     resp = requests.get(approvals_url, auth=AUTH, headers=HEADERS)
@@ -750,25 +755,30 @@ def fetch_yaml_pipeline_approvals(project_name, user_email):
         return None, {"error": f"Failed to fetch approvals: {resp.text}"}
     return resp.json(), None
 
-async def fetch_pending_approval_descriptor_for_user(project_name, user_email):
+async def fetch_pending_approval_descriptor_for_user(user_email):
     """
     Fetches pending pipeline approvals for a user, returns the descriptor of the step where the user's email is present in assignedApprover.uniqueName,
     then fetches the user's memberships from the Graph API, and finally fetches all group principalNames concurrently.
 
     Args:
-        project_name (str): The name of the project.
         user_email (str): The user's email address.
 
     Returns:
         tuple: (list of group principalNames if found, error dict or None)
     """
-    api_urls, error = load_api_urls(project_name)
-    if error:
-        return None, error
+    # Load common URLs from /data/common_urls.json
+    common_urls_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        'data', 'common_urls.json'
+    )
+    if not os.path.exists(common_urls_path):
+        return None, {"error": "common_urls.json not found"}
+    with open(common_urls_path, 'r') as f:
+        common_urls = json.load(f)
 
-    approvals_url_template = api_urls.get("yaml-pipeline-approvals")
+    approvals_url_template = common_urls.get("yaml-pipeline-approvals")
     if not approvals_url_template:
-        return None, {"error": "pipeline-approvals URL not found in urls.json"}
+        return None, {"error": "yaml-pipeline-approvals URL not found in common_urls.json"}
 
     approvals_url = approvals_url_template.replace("{user}", user_email)
 

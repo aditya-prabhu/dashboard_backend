@@ -16,7 +16,6 @@
     "user-pending-approvals": "https://vsrm.dev.azure.com/PSJH/Administrative%20Technology/_apis/release/approvals?assignedToFilter={userName}&api-version=7.2-preview.3",
     "yaml-pipelines-list": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/pipelines?api-version=7.2-preview.1",
     "yaml-pipeline-builds": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/build/builds?definitions={pipelineId}&api-version=7.1",
-    "yaml-pipeline-approvals": "https://dev.azure.com/PSJH/Administrative%20Technology/_apis/pipelines/approvals?$expand=steps&assignedTo={user}&state=pending&api-version=7.2-preview.2",
     "tags": [ "CHMP", "Release Plan"],
     "definition-ids": [281, 279, 291]
 }
